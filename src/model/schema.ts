@@ -86,6 +86,24 @@ export const Joker = z.object({
   fit: ImageFit.default({ scale: 1, x: 0, y: 0 }),
 })
 
+export const FRAME_SHAPES = ['rect', 'arch', 'oval'] as const
+
+/** The frame around the picture window on face cards and jokers. Lengths are mm at poker width and scale with the card. */
+export const ArtFrame = z.object({
+  shape: z.enum(FRAME_SHAPES).default('rect'),
+  marginXMm: z.number().min(0).max(28).default(11.5),
+  marginYMm: z.number().min(0).max(40).default(11.5),
+  cornerRadiusMm: z.number().min(0).max(20).default(0),
+  lines: z.enum(['double', 'single', 'none']).default('double'),
+  widthMm: z.number().min(0.05).max(3).default(0.45),
+  color: color.nullable().default(null).describe('Frame colour, or null to follow the deck accent.'),
+  tint: z.number().min(0).max(0.4).default(0.05).describe('How strongly the suit colour washes the window behind the art.'),
+})
+
+export function defaultArtFrame(): ArtFrame {
+  return { shape: 'rect', marginXMm: 11.5, marginYMm: 11.5, cornerRadiusMm: 0, lines: 'double', widthMm: 0.45, color: null, tint: 0.05 }
+}
+
 export const CardSpec = z.object({
   widthMm: z.number().min(30).max(150),
   heightMm: z.number().min(40).max(200),
@@ -118,6 +136,7 @@ export const Deck = z.object({
   fonts: z.array(FontSource).default([]),
   suits: z.array(Suit).min(1),
   ranks: z.array(Rank).min(1),
+  artFrame: ArtFrame.default(defaultArtFrame),
   faces: z.record(z.string(), Face).default({}),
   back: Back,
   jokers: z.object({ enabled: z.boolean(), items: z.array(Joker) }),
@@ -135,6 +154,8 @@ export type Face = z.infer<typeof Face>
 export type Back = z.infer<typeof Back>
 export type BackPattern = (typeof BACK_PATTERNS)[number]
 export type Joker = z.infer<typeof Joker>
+export type ArtFrame = z.infer<typeof ArtFrame>
+export type FrameShape = (typeof FRAME_SHAPES)[number]
 export type CardSpec = z.infer<typeof CardSpec>
 export type ResolvedCard = z.infer<typeof ResolvedCard>
 export type Deck = z.infer<typeof Deck>

@@ -2,7 +2,7 @@ import { useStore } from '../state/store'
 import { findCard, listCards } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox, artPrompt, cardSubject, ratioAdvice, type ArtArea } from '../model/artbox'
-import { BACK_PATTERNS, defaultLettering, type BackPattern, type Deck, type Joker } from '../model/schema'
+import { BACK_PATTERNS, defaultArtFrame, defaultLettering, FRAME_SHAPES, type BackPattern, type Deck, type Joker } from '../model/schema'
 import { CardSvg } from '../render/CardSvg'
 import { ColorField, Field, FitControls, FontPicker, ImageDrop, Section, Segmented, Slider, TextField, Toggle } from './controls'
 
@@ -153,11 +153,11 @@ export function ArtworkPanel() {
       <Section title={`${card.rank.label} of ${card.suit.name}`}>
         <ImageDrop value={face.image} onChange={(image) => setFace({ image })} />
         {face.image ? (
-          <ArtGuide card={deck.card} area={face.mirror ? 'half' : 'full'} {...subject} />
+          <ArtGuide card={deck.card} frame={deck.artFrame} area={face.mirror ? 'half' : 'full'} {...subject} />
         ) : (
           <>
-            <ArtGuide card={deck.card} area="half" {...subject} />
-            <ArtGuide card={deck.card} area="full" {...subject} />
+            <ArtGuide card={deck.card} frame={deck.artFrame} area="half" {...subject} />
+            <ArtGuide card={deck.card} frame={deck.artFrame} area="full" {...subject} />
           </>
         )}
         {face.image && (
@@ -168,6 +168,7 @@ export function ArtworkPanel() {
         )}
         {!face.image && FACE_RANKS.has(card.rank.id) && <p className="field-hint">Without a picture this card shows a typographic monogram in the suit’s typeface.</p>}
       </Section>
+      <ArtFrameControls />
       <LetteringControls rankId={card.rank.id} monogram={FACE_RANKS.has(card.rank.id) && !face.image} />
       {face.image && (
         <Section title="Copy to">
@@ -231,7 +232,7 @@ export function BackPanel() {
         ) : (
           <>
             <ImageDrop value={back.image} onChange={(image) => edit((d) => void (d.back.image = image))} />
-            <ArtGuide card={deck.card} area="back" subject="" court={false} colors={back.colors} />
+            <ArtGuide card={deck.card} frame={deck.artFrame} area="back" subject="" court={false} colors={back.colors} />
             {back.image && <FitControls fit={back.fit} onChange={(fit) => edit((d) => void (d.back.fit = fit), 'backfit')} />}
           </>
         )}
@@ -305,6 +306,7 @@ function nextJokerId(items: Joker[]): string {
 function JokerEditor({ index }: { index: number }) {
   const joker = useStore((s) => s.deck.jokers.items[index])
   const cardSize = useStore((s) => s.deck.card)
+  const frame = useStore((s) => s.deck.artFrame)
   const update = useStore((s) => s.update)
   const select = useStore((s) => s.select)
   if (!joker) return null
@@ -332,7 +334,7 @@ function JokerEditor({ index }: { index: number }) {
       <Field label="Picture">
         <ImageDrop value={joker.image} onChange={(v) => set((j) => void (j.image = v))} />
       </Field>
-      <ArtGuide card={cardSize} area="full" subject="the Joker" court colors={[joker.color]} />
+      <ArtGuide card={cardSize} frame={frame} area="full" subject="the Joker" court colors={[joker.color]} />
       {joker.image && <FitControls fit={joker.fit} onChange={(fit) => set((j) => void (j.fit = fit), `jf${index}`)} />}
     </Section>
   )
@@ -342,9 +344,9 @@ function JokerEditor({ index }: { index: number }) {
 const IMPORT_MAX_EDGE = 1024
 
 /** Tells the artist what shape and size to generate for a picture slot on the current card size. */
-function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; area: ArtArea; subject: string; court: boolean; colors: string[] }) {
+function ArtGuide({ card, frame, area, subject, court, colors }: { card: Deck['card']; frame: Deck['artFrame']; area: ArtArea; subject: string; court: boolean; colors: string[] }) {
   const notify = useStore((s) => s.notify)
-  const box = artBox(card)
+  const box = artBox(card, frame)
   const [w, h] = area === 'back' ? [card.widthMm, card.heightMm] : area === 'half' ? [box.w, box.h / 2] : [box.w, box.h]
   const a = ratioAdvice(w, h)
   const what = area === 'back' ? 'The picture covers the full card,' : area === 'half' ? 'Each half is' : 'The window is'
@@ -365,6 +367,7 @@ function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; 
         {what} {size}. Generate at <strong>{shape}</strong>; it fills the window {crop}.
         {area === 'half' && ' Draw only the top half of the figure (head to waist), anchored to the top edge; the card rotates a copy for the bottom.'}
         {area === 'back' && ' The rounded corners trim the image, so keep detail away from them.'}
+        {area !== 'back' && frame.shape !== 'rect' && ` The window is ${frame.shape === 'oval' ? 'an oval' : 'arched'}, so keep the subject away from the corners.`}
       </p>
       <p className="field-hint">
         For sharp print at 300 dpi you need {a.px.w} × {a.px.h} px.{' '}
@@ -445,6 +448,77 @@ function LetteringControls({ rankId, monogram }: { rankId: string; monogram: boo
           </button>
         )}
       </div>
+    </Section>
+  )
+}
+
+const SHAPE_LABELS: Record<(typeof FRAME_SHAPES)[number], string> = { rect: 'Rectangle', arch: 'Arch', oval: 'Oval' }
+
+/** The frame around the picture window, shared by every face card and joker in the deck. */
+function ArtFrameControls() {
+  const deck = useStore((s) => s.deck)
+  const update = useStore((s) => s.update)
+  const frame = deck.artFrame
+  const set = (field: string, fn: (f: Deck['artFrame']) => void) => update((d) => fn(d.artFrame), `frame-${field}`)
+  const mm = (v: number) => `${v.toFixed(1)} mm`
+  const pct = (v: number) => `${Math.round(v * 100)}%`
+  const changed = JSON.stringify(frame) !== JSON.stringify(defaultArtFrame())
+  return (
+    <Section
+      title="Art frame (whole deck)"
+      aside={
+        changed && (
+          <button type="button" className="btn ghost small" onClick={() => update((d) => void (d.artFrame = defaultArtFrame()))}>
+            Reset
+          </button>
+        )
+      }
+    >
+      <Field label="Shape">
+        <Segmented value={frame.shape} options={FRAME_SHAPES.map((v) => ({ value: v, label: SHAPE_LABELS[v] }))} onChange={(shape) => set('shape', (f) => void (f.shape = shape))} />
+      </Field>
+      <div className="row2">
+        <Field label="Side margin">
+          <Slider value={frame.marginXMm} min={2} max={28} step={0.1} onChange={(v) => set('mx', (f) => void (f.marginXMm = v))} format={mm} />
+        </Field>
+        <Field label="Top and bottom margin">
+          <Slider value={frame.marginYMm} min={2} max={40} step={0.1} onChange={(v) => set('my', (f) => void (f.marginYMm = v))} format={mm} />
+        </Field>
+      </div>
+      {frame.shape !== 'oval' && (
+        <Field label="Corner radius">
+          <Slider value={frame.cornerRadiusMm} min={0} max={20} step={0.1} onChange={(v) => set('r', (f) => void (f.cornerRadiusMm = v))} format={mm} />
+        </Field>
+      )}
+      <Field label="Lines">
+        <Segmented
+          value={frame.lines}
+          options={[
+            { value: 'double' as const, label: 'Double' },
+            { value: 'single' as const, label: 'Single' },
+            { value: 'none' as const, label: 'None' },
+          ]}
+          onChange={(lines) => set('lines', (f) => void (f.lines = lines))}
+        />
+      </Field>
+      {frame.lines !== 'none' && (
+        <Field label="Thickness">
+          <Slider value={frame.widthMm} min={0.05} max={3} step={0.05} onChange={(v) => set('w', (f) => void (f.widthMm = v))} format={(v) => `${v.toFixed(2)} mm`} />
+        </Field>
+      )}
+      <div className="row2">
+        <Field label="Color" hint={frame.color ? undefined : 'Following the deck accent'}>
+          <ColorField value={frame.color ?? deck.card.accent} onChange={(v) => set('color', (f) => void (f.color = v))} />
+        </Field>
+        <Field label="Suit wash">
+          <Slider value={frame.tint} min={0} max={0.4} step={0.01} onChange={(v) => set('tint', (f) => void (f.tint = v))} format={pct} />
+        </Field>
+      </div>
+      {frame.color && (
+        <button type="button" className="btn ghost small" onClick={() => set('color', (f) => void (f.color = null))}>
+          Follow the deck accent
+        </button>
+      )}
     </Section>
   )
 }

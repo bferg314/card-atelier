@@ -1,4 +1,4 @@
-import type { Deck } from './schema'
+import type { ArtFrame, Deck } from './schema'
 
 export interface Box {
   x: number
@@ -8,9 +8,11 @@ export interface Box {
 }
 
 /** The framed picture window on a face card or joker, in mm. Shared by the renderer and the art guidance. */
-export function artBox(card: Deck['card']): Box {
-  const inset = 11.5 * (card.widthMm / 63.5)
-  return { x: inset, y: inset, w: card.widthMm - 2 * inset, h: card.heightMm - 2 * inset }
+export function artBox(card: Deck['card'], frame: ArtFrame): Box {
+  const s = card.widthMm / 63.5
+  const x = Math.min(frame.marginXMm * s, card.widthMm / 2 - 2)
+  const y = Math.min(frame.marginYMm * s, card.heightMm / 2 - 2)
+  return { x, y, w: card.widthMm - 2 * x, h: card.heightMm - 2 * y }
 }
 
 /** Ratios that common image generators offer as presets. */

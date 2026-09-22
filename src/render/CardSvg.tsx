@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import type { Back, Deck, FontRef, ImageFit, Joker, Lettering, Suit } from '../model/schema'
+import type { Back, Deck, FontRef, FrameShape, ImageFit, Joker, Lettering, Suit } from '../model/schema'
 import type { CardRef } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox } from '../model/artbox'
@@ -99,13 +99,45 @@ function FittedImage({ href, x, y, w, h, fit, clipId, align = 'xMidYMid' }: { hr
   )
 }
 
-/** The frame around court card art and pictures. */
-function Panel({ x, y, w, h, accent, children }: { x: number; y: number; w: number; h: number; accent: string; children?: ReactNode }) {
+/** Outline of the picture window: a rounded rectangle, an arched top, or an oval. */
+export function framePath(shape: FrameShape, x: number, y: number, w: number, h: number, r: number): string {
+  const x2 = x + w
+  const y2 = y + h
+  if (shape === 'oval') {
+    const rx = w / 2
+    const ry = h / 2
+    return `M${x} ${y + ry}A${rx} ${ry} 0 0 1 ${x2} ${y + ry}A${rx} ${ry} 0 0 1 ${x} ${y + ry}Z`
+  }
+  const k = Math.max(0, Math.min(r, w / 2, h / 2))
+  if (shape === 'arch') {
+    // Straight sides that spring into a half-ellipse at the top; the foot keeps the corner radius.
+    const ry = Math.min(w / 2, h - k)
+    return `M${x} ${y + ry}A${w / 2} ${ry} 0 0 1 ${x2} ${y + ry}L${x2} ${y2 - k}Q${x2} ${y2} ${x2 - k} ${y2}L${x + k} ${y2}Q${x} ${y2} ${x} ${y2 - k}Z`
+  }
+  return `M${x + k} ${y}L${x2 - k} ${y}Q${x2} ${y} ${x2} ${y + k}L${x2} ${y2 - k}Q${x2} ${y2} ${x2 - k} ${y2}L${x + k} ${y2}Q${x} ${y2} ${x} ${y2 - k}L${x} ${y + k}Q${x} ${y} ${x + k} ${y}Z`
+}
+
+/** The frame around court card art and pictures, plus the window it clips them to. */
+function Panel({ deck, x, y, w, h, tintColor, clipId, children }: { deck: Deck; x: number; y: number; w: number; h: number; tintColor: string; clipId: string; children?: ReactNode }) {
+  const f = deck.artFrame
+  const s = deck.card.widthMm / 63.5
+  const stroke = f.color ?? deck.card.accent
+  const width = f.widthMm * s
+  const radius = f.cornerRadiusMm * s
+  const inner = framePath(f.shape, x, y, w, h, radius)
+  const gap = width * 2
+  const outer = framePath(f.shape, x - gap, y - gap, w + 2 * gap, h + 2 * gap, radius + gap)
   return (
     <g>
-      {children}
-      <rect x={x} y={y} width={w} height={h} fill="none" stroke={accent} strokeWidth={0.45} />
-      <rect x={x - 0.9} y={y - 0.9} width={w + 1.8} height={h + 1.8} fill="none" stroke={accent} strokeWidth={0.2} />
+      <defs>
+        <clipPath id={clipId}>
+          <path d={inner} />
+        </clipPath>
+      </defs>
+      {f.tint > 0 && <path d={inner} fill={tintColor} opacity={f.tint} />}
+      <g clipPath={`url(#${clipId})`}>{children}</g>
+      {f.lines !== 'none' && <path d={inner} fill="none" stroke={stroke} strokeWidth={width} />}
+      {f.lines === 'double' && <path d={outer} fill="none" stroke={stroke} strokeWidth={width * 0.45} />}
     </g>
   )
 }
@@ -146,14 +178,14 @@ function StandardArt({ deck, card, uid }: { deck: Deck; card: Extract<CardRef, {
   const { widthMm: W, heightMm: H, accent } = deck.card
   const s = W / 63.5
   const { suit, rank, face } = card
-  const { x: px, y: py, w: pw, h: ph } = artBox(deck.card)
+  const { x: px, y: py, w: pw, h: ph } = artBox(deck.card, deck.artFrame)
 
   let center: ReactNode
   if (face?.image) {
     if (face.mirror) {
       const half = ph / 2
       center = (
-        <Panel x={px} y={py} w={pw} h={ph} accent={accent}>
+        <Panel deck={deck} x={px} y={py} w={pw} h={ph} tintColor={suit.color} clipId={`${uid}-topframe`}>
           <FittedImage href={face.image} x={px} y={py} w={pw} h={half} fit={face.fit} clipId={`${uid}-top`} align="xMidYMin" />
           <g transform={`rotate(180 ${W / 2} ${H / 2})`}>
             <FittedImage href={face.image} x={px} y={py} w={pw} h={half} fit={face.fit} clipId={`${uid}-bot`} align="xMidYMin" />
@@ -163,7 +195,7 @@ function StandardArt({ deck, card, uid }: { deck: Deck; card: Extract<CardRef, {
       )
     } else {
       center = (
-        <Panel x={px} y={py} w={pw} h={ph} accent={accent}>
+        <Panel deck={deck} x={px} y={py} w={pw} h={ph} tintColor={suit.color} clipId={`${uid}-fullframe`}>
           <FittedImage href={face.image} x={px} y={py} w={pw} h={ph} fit={face.fit} clipId={`${uid}-full`} />
         </Panel>
       )
@@ -243,19 +275,11 @@ function CourtMonogram({ deck, suit, label, lettering, clipId, x, y, w, h }: { d
       />
     </g>
   )
+  // The panel clips its children, so a nudged or enlarged letter is trimmed by the frame.
   return (
-    <Panel x={x} y={y} w={w} h={h} accent={accent}>
-      <defs>
-        <clipPath id={clipId}>
-          <rect x={x} y={y} width={w} height={h} />
-        </clipPath>
-      </defs>
-      <rect x={x} y={y} width={w} height={h} fill={suit.color} opacity={0.05} />
-      {/* A nudged or enlarged letter is trimmed by the frame rather than running over it. */}
-      <g clipPath={`url(#${clipId})`}>
-        {half}
-        <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
-      </g>
+    <Panel deck={deck} x={x} y={y} w={w} h={h} tintColor={suit.color} clipId={clipId}>
+      {half}
+      <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
       <line x1={x} y1={H / 2} x2={x + w} y2={H / 2} stroke={accent} strokeWidth={0.3} />
       <circle cx={W / 2} cy={H / 2} r={1.1 * s} fill={accent} />
     </Panel>
@@ -278,15 +302,15 @@ function JokerArt({ deck, joker, uid }: { deck: Deck; joker: Joker; uid: string 
       ))}
     </text>
   )
-  const { x: px, y: py, w: pw, h: ph } = artBox(deck.card)
+  const { x: px, y: py, w: pw, h: ph } = artBox(deck.card, deck.artFrame)
   return (
     <>
       {joker.image ? (
-        <Panel x={px} y={py} w={pw} h={ph} accent={accent}>
+        <Panel deck={deck} x={px} y={py} w={pw} h={ph} tintColor={joker.color} clipId={`${uid}-jokerartframe`}>
           <FittedImage href={joker.image} x={px} y={py} w={pw} h={ph} fit={joker.fit} clipId={`${uid}-joker`} />
         </Panel>
       ) : (
-        <Panel x={px} y={py} w={pw} h={ph} accent={accent}>
+        <Panel deck={deck} x={px} y={py} w={pw} h={ph} tintColor={joker.color} clipId={`${uid}-jokertypeframe`}>
           <Jester x={W / 2} y={H / 2 - 5 * s} size={30 * s} color={joker.color} accent={accent} />
           <text x={W / 2} y={H / 2 + 20 * s} fontSize={6 * s} textAnchor="middle" fill={joker.color} letterSpacing={0.8 * s} {...fontProps(joker.font)}>
             {joker.label}

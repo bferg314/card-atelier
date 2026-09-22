@@ -44,7 +44,7 @@ describe('deck model', () => {
 
 describe('art guidance', () => {
   it('matches the poker art window to the nearest generator preset', () => {
-    const box = artBox(createDeck().card)
+    const box = artBox(createDeck().card, createDeck().artFrame)
     expect(box.w).toBeCloseTo(40.5)
     expect(ratioAdvice(box.w, box.h)).toMatchObject({ preset: '2:3', cropAxis: 'sides' })
     expect(ratioAdvice(box.w, box.h / 2).preset).toBe('5:4')
@@ -54,7 +54,7 @@ describe('art guidance', () => {
 
 describe('art prompt', () => {
   it('names the card, the slot composition and the shape', () => {
-    const box = artBox(createDeck().card)
+    const box = artBox(createDeck().card, createDeck().artFrame)
     const advice = ratioAdvice(box.w, box.h / 2)
     const text = artPrompt({ area: 'half', subject: cardSubject({ id: 'K', label: 'K' }, 'Hearts'), court: true, advice, colors: ['#c0162c'] })
     expect(text).toContain('the King of Hearts')
@@ -74,5 +74,28 @@ describe('rank lettering', () => {
 
     loaded.ranks[10].lettering.monogram = { scale: 1.2, y: -3 }
     expect(parseDeck(serializeDeck(loaded)).ranks[10].lettering.monogram).toEqual({ scale: 1.2, y: -3 })
+  })
+})
+
+describe('art frame', () => {
+  it('sizes the window from the frame margins and scales them with the card', () => {
+    const deck = createDeck()
+    expect(artBox(deck.card, deck.artFrame)).toMatchObject({ x: 11.5, y: 11.5, w: 40.5 })
+    deck.artFrame.marginXMm = 20
+    deck.artFrame.marginYMm = 5
+    expect(artBox(deck.card, deck.artFrame)).toMatchObject({ x: 20, y: 5, w: 23.5, h: 78.9 })
+    // tarot is wider, so the same margins grow with the card
+    deck.card.widthMm = 70
+    deck.card.heightMm = 120
+    expect(artBox(deck.card, deck.artFrame).x).toBeCloseTo(22.05)
+  })
+
+  it('keeps a window even with margins larger than the card', () => {
+    const deck = createDeck()
+    deck.artFrame.marginXMm = 28
+    deck.artFrame.marginYMm = 40
+    const box = artBox(deck.card, deck.artFrame)
+    expect(box.w).toBeGreaterThan(0)
+    expect(box.h).toBeGreaterThan(0)
   })
 })
