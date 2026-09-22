@@ -104,6 +104,17 @@ function dosTime(d: Date): number {
   return ((date << 16) | time) >>> 0
 }
 
+/**
+ * Base64 for arbitrary bytes. The whole array cannot be spread into String.fromCharCode: a card carrying embedded
+ * artwork runs to hundreds of thousands of bytes, and that many arguments overflows the call stack.
+ */
+export function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  return btoa(binary)
+}
+
 /** The bytes behind a `data:...;base64,...` URI. */
 export function dataUriBytes(uri: string): Uint8Array {
   const base64 = uri.slice(uri.indexOf(',') + 1)

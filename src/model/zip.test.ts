@@ -4,11 +4,21 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { crc32, dataUriBytes, zip } from './zip'
+import { crc32, dataUriBytes, toBase64, zip } from './zip'
 
 describe('zip writer', () => {
   it('computes the standard CRC-32', () => {
     expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926)
+  })
+
+  it('encodes bytes far past the argument limit', () => {
+    // A card with embedded artwork is hundreds of KB; spreading that into String.fromCharCode overflows the stack.
+    const big = new Uint8Array(500_000)
+    for (let i = 0; i < big.length; i++) big[i] = i % 251
+    const round = dataUriBytes('data:application/octet-stream;base64,' + toBase64(big))
+    expect(round.length).toBe(big.length)
+    expect(round[0]).toBe(big[0])
+    expect(round.at(-1)).toBe(big.at(-1))
   })
 
   it('decodes base64 data URIs', () => {

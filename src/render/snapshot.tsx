@@ -7,6 +7,7 @@ import { googleFontCssUrl, SYSTEM_FONTS } from '../fonts/fonts'
 import { CardSvg } from './CardSvg'
 import { readAsDataUrl } from '../model/images'
 import { sha256 } from '../model/sha256'
+import { toBase64 } from '../model/zip'
 import { loadFonts, outlineSvg } from './outline'
 
 export interface SnapshotResult {
@@ -71,7 +72,7 @@ function withFonts(svg: string, css: string): string {
 }
 
 function svgDataUri(svg: string): string {
-  return 'data:image/svg+xml;base64,' + btoa(String.fromCharCode(...new TextEncoder().encode(svg)))
+  return 'data:image/svg+xml;base64,' + toBase64(new TextEncoder().encode(svg))
 }
 
 /**
