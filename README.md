@@ -1,6 +1,6 @@
 # Card Atelier
 
-A browser app for designing playing card decks and exporting them as portable JSON.
+A browser app for designing playing card decks and exporting them as portable JSON. Hosted at **[card-atelier.tinyibex.com](https://card-atelier.tinyibex.com)**.
 
 ![The Artwork panel, with a King of Hearts on the stage and the deck laid out below](docs/screenshot.jpg)
 
@@ -10,6 +10,7 @@ npm run dev     # http://localhost:5173
 npm test        # model tests (schema, round trip, card list)
 npm run build   # type check + production build in dist/
 npm run schema  # regenerate docs/open-playing-cards.schema.json after changing src/model/open.ts
+npm run deploy  # build and publish to Cloudflare Workers
 ```
 
 Decks save automatically to the browser (IndexedDB). **Export JSON** offers two formats:
