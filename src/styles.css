@@ -1173,14 +1173,55 @@ select.input optgroup {
 }
 
 .art-guide {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.art-guide summary {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-dim);
+  list-style: none;
+}
+
+.art-guide summary::-webkit-details-marker {
+  display: none;
+}
+
+.art-guide summary::before {
+  content: '▸';
+  margin-right: 6px;
+  color: var(--ink-faint);
+  transition: transform 0.15s ease-out;
+}
+
+.art-guide[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.art-guide summary span:first-of-type {
+  flex: 1;
+}
+
+.art-guide summary:hover {
+  color: var(--ink);
+}
+
+.art-guide-shape {
+  color: var(--brass-lite);
+  font-variant-numeric: tabular-nums;
 }
 
 .art-guide p {
-  margin: 0;
+  margin: 8px 0 0;
+}
+
+.art-guide .btn {
+  margin-top: 10px;
 }
 
 .export-option {

@@ -347,16 +347,22 @@ function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; 
   const box = artBox(card)
   const [w, h] = area === 'back' ? [card.widthMm, card.heightMm] : area === 'half' ? [box.w, box.h / 2] : [box.w, box.h]
   const a = ratioAdvice(w, h)
-  const what = area === 'back' ? 'The back picture covers the full card,' : area === 'half' ? 'Mirrored (double-ended): each half is' : 'Single picture: the window is'
+  const what = area === 'back' ? 'The picture covers the full card,' : area === 'half' ? 'Each half is' : 'The window is'
   const size = `${w.toFixed(1)} × ${h.toFixed(1)} mm`
   // Mirrored halves are pinned to the top edge, so any vertical excess comes off the bottom only.
   const edges = area === 'half' && a.cropAxis === 'top and bottom' ? 'bottom' : a.cropAxis
   const crop = a.cropAxis === 'none' ? 'with no cropping' : `losing about ${Math.round(a.cropped * 100)}% off the ${edges}`
   const overCap = Math.max(a.px.w, a.px.h) > IMPORT_MAX_EDGE
+  const shape = `${a.preset} ${a.w >= a.h ? 'landscape' : 'portrait'}`
+  const heading = area === 'back' ? 'Back picture' : area === 'half' ? 'Mirrored (double-ended)' : 'Single picture'
   return (
-    <div className="art-guide">
+    <details className="art-guide">
+      <summary>
+        <span>{heading}</span>
+        <span className="art-guide-shape">{shape}</span>
+      </summary>
       <p className="field-hint">
-        {what} {size}. Generate at <strong>{a.preset}</strong> {a.w >= a.h ? 'landscape' : 'portrait'}; it fills the window {crop}.
+        {what} {size}. Generate at <strong>{shape}</strong>; it fills the window {crop}.
         {area === 'half' && ' Draw only the top half of the figure (head to waist), anchored to the top edge; the card rotates a copy for the bottom.'}
         {area === 'back' && ' The rounded corners trim the image, so keep detail away from them.'}
       </p>
@@ -376,7 +382,7 @@ function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; 
       >
         Copy prompt
       </button>
-    </div>
+    </details>
   )
 }
 
