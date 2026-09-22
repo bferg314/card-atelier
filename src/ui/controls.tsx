@@ -1,0 +1,252 @@
+import { useRef, useState, type ReactNode } from 'react'
+import { GOOGLE_FONTS, SYSTEM_FONTS, loadGoogleFont, fontStack, loadEmbeddedFont } from '../fonts/fonts'
+import { importImage, readAsDataUrl } from '../model/images'
+import type { FontRef, ImageFit } from '../model/schema'
+import { useStore } from '../state/store'
+
+export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+  return (
+    <section className="section">
+      <header className="section-head">
+        <h3>{title}</h3>
+        {aside}
+      </header>
+      <div className="section-body">{children}</div>
+    </section>
+  )
+}
+
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+      {hint && <span className="field-hint">{hint}</span>}
+    </label>
+  )
+}
+
+export function TextField({ value, onChange, placeholder, maxLength }: { value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number }) {
+  return <input className="input" type="text" value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} />
+}
+
+export function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  return (
+    <span className="color-field">
+      <span className="swatch" style={{ background: value }}>
+        <input type="color" value={value.length === 4 ? expand(value) : value.slice(0, 7)} onChange={(e) => onChange(e.target.value)} aria-label="Pick color" />
+      </span>
+      <input
+        className="input mono"
+        value={draft ?? value}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) onChange(e.target.value.toLowerCase())
+        }}
+        onBlur={() => setDraft(null)}
+        spellCheck={false}
+      />
+    </span>
+  )
+}
+
+function expand(hex: string) {
+  return '#' + [...hex.slice(1)].map((c) => c + c).join('')
+}
+
+export function Slider({ value, min, max, step, onChange, format }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void; format?: (v: number) => string }) {
+  return (
+    <span className="slider">
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <output>{format ? format(value) : value}</output>
+    </span>
+  )
+}
+
+export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className="toggle">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="toggle-track" aria-hidden>
+        <span className="toggle-thumb" />
+      </span>
+      <span>{label}</span>
+    </label>
+  )
+}
+
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="segmented" role="radiogroup">
+      {options.map((o) => (
+        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Font family + weight picker. Lists web fonts, system fonts and fonts uploaded into this deck. */
+export function FontPicker({ value, onChange }: { value: FontRef; onChange: (v: FontRef) => void }) {
+  const fonts = useStore((s) => s.deck.fonts)
+  const update = useStore((s) => s.update)
+  const notify = useStore((s) => s.notify)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const embedded = fonts.filter((f) => f.source === 'embedded').map((f) => f.family)
+
+  async function upload(file: File) {
+    if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) {
+      notify('Fonts must be .ttf, .otf, .woff or .woff2 files.', 'error')
+      return
+    }
+    if (file.size > 1_500_000) notify('That font is large; it will make the exported deck file big.', 'error')
+    const data = await readAsDataUrl(file)
+    const family = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim()
+    try {
+      await loadEmbeddedFont(family, data)
+    } catch {
+      notify('That font file could not be read.', 'error')
+      return
+    }
+    update((d) => {
+      d.fonts = d.fonts.filter((f) => f.family !== family)
+      d.fonts.push({ family, source: 'embedded', data })
+    })
+    onChange({ ...value, family })
+    notify(`Added font “${family}”`)
+  }
+
+  return (
+    <div className="font-picker">
+      <select
+        className="input"
+        value={value.family}
+        style={{ fontFamily: fontStack(value.family) }}
+        onChange={(e) => {
+          if (e.target.value === '__upload__') {
+            fileRef.current?.click()
+            return
+          }
+          loadGoogleFont(e.target.value)
+          onChange({ ...value, family: e.target.value })
+        }}
+      >
+        {embedded.length > 0 && (
+          <optgroup label="Uploaded">
+            {embedded.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label="Web fonts">
+          {GOOGLE_FONTS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="System">
+          {SYSTEM_FONTS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </optgroup>
+        {!GOOGLE_FONTS.includes(value.family) && !SYSTEM_FONTS.includes(value.family) && !embedded.includes(value.family) && <option value={value.family}>{value.family}</option>}
+        <option value="__upload__">Upload a font file…</option>
+      </select>
+      <select className="input weight" value={value.weight} onChange={(e) => onChange({ ...value, weight: Number(e.target.value) })} aria-label="Weight">
+        <option value={400}>Regular</option>
+        <option value={700}>Bold</option>
+      </select>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".ttf,.otf,.woff,.woff2"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) upload(f)
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
+/** Drop zone / picker for a picture. Stores it as a downscaled data URI. */
+export function ImageDrop({ value, onChange, maxEdge = 1024, label = 'Drop a picture or click to browse' }: { value: string | null; onChange: (v: string | null) => void; maxEdge?: number; label?: string }) {
+  const notify = useStore((s) => s.notify)
+  const ref = useRef<HTMLInputElement>(null)
+  const [over, setOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function take(file: File | undefined) {
+    if (!file) return
+    setBusy(true)
+    try {
+      onChange(await importImage(file, maxEdge))
+    } catch (e) {
+      notify((e as Error).message || 'That image could not be read.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div
+      className={`image-drop ${over ? 'over' : ''} ${value ? 'has' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setOver(true)
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setOver(false)
+        take(e.dataTransfer.files[0])
+      }}
+    >
+      <button type="button" className="image-drop-target" onClick={() => ref.current?.click()} disabled={busy}>
+        {value ? <img src={value} alt="" /> : <span className="image-drop-icon" aria-hidden>＋</span>}
+        <span>{busy ? 'Processing…' : value ? 'Replace picture' : label}</span>
+      </button>
+      {value && (
+        <button type="button" className="btn ghost small" onClick={() => onChange(null)}>
+          Remove
+        </button>
+      )}
+      <input
+        ref={ref}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          take(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
+export function FitControls({ fit, onChange }: { fit: ImageFit; onChange: (f: ImageFit) => void }) {
+  const pct = (v: number) => `${Math.round(v * 100)}%`
+  return (
+    <div className="fit-controls">
+      <Field label="Zoom">
+        <Slider value={fit.scale} min={0.5} max={3} step={0.01} onChange={(scale) => onChange({ ...fit, scale })} format={pct} />
+      </Field>
+      <Field label="Horizontal">
+        <Slider value={fit.x} min={-1} max={1} step={0.01} onChange={(x) => onChange({ ...fit, x })} format={(v) => (v > 0 ? '+' : '') + pct(v)} />
+      </Field>
+      <Field label="Vertical">
+        <Slider value={fit.y} min={-1} max={1} step={0.01} onChange={(y) => onChange({ ...fit, y })} format={(v) => (v > 0 ? '+' : '') + pct(v)} />
+      </Field>
+    </div>
+  )
+}
