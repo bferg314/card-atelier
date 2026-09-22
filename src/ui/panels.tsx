@@ -30,6 +30,14 @@ export function DeckPanel() {
         <Field label="Designer">
           <TextField value={deck.author} placeholder="Your name" maxLength={80} onChange={(v) => update((d) => void (d.author = v), 'author')} />
         </Field>
+        <div className="row2">
+          <Field label="Licence" hint="Used in the Open Playing Cards export, e.g. CC-BY-4.0">
+            <TextField value={deck.license} placeholder="All rights reserved" maxLength={80} onChange={(v) => update((d) => void (d.license = v), 'license')} />
+          </Field>
+          <Field label="Source">
+            <TextField value={deck.source} placeholder="https://…" maxLength={200} onChange={(v) => update((d) => void (d.source = v), 'source')} />
+          </Field>
+        </div>
         <Field label="Notes">
           <textarea className="input" rows={2} aria-label="Notes" value={deck.description} placeholder="What games is this deck for?" onChange={(e) => update((d) => void (d.description = e.target.value), 'desc')} />
         </Field>
@@ -340,6 +348,9 @@ function JokerEditor({ index }: { index: number }) {
   )
 }
 
+/** Corner index scale for decks played on screen, where a card may be drawn only 30 px wide. */
+const DIGITAL_INDEX_SCALE = 1.8
+
 /** Upload limit applied by ImageDrop, mirrored here so the guidance can warn about it. */
 const IMPORT_MAX_EDGE = 1024
 
@@ -437,6 +448,14 @@ function LetteringControls({ rankId, monogram }: { rankId: string; monogram: boo
       <div className="button-row">
         <button type="button" className="btn ghost small" onClick={() => update((d) => d.ranks.forEach((r) => (r.lettering.corner = { ...corner })))}>
           Corner to every rank
+        </button>
+        <button
+          type="button"
+          className="btn ghost small"
+          title="Enlarge every corner index, so cards stay readable when a game draws them small"
+          onClick={() => update((d) => d.ranks.forEach((r) => (r.lettering.corner = { ...r.lettering.corner, scale: DIGITAL_INDEX_SCALE })))}
+        >
+          Oversize for digital play
         </button>
         {monogram && (
           <button

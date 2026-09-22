@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Deck } from '../model/schema'
 import { listCards } from '../model/resolve'
 import { usedFamilies } from '../model/fontsync'
-import { buildOpenDeck, rasterFor, type OpenDeck } from '../model/open'
+import { buildOpenDeck, hashableJson, rasterFor, type OpenDeck } from '../model/open'
 import { googleFontCssUrl, SYSTEM_FONTS } from '../fonts/fonts'
 import { CardSvg } from './CardSvg'
 import { readAsDataUrl } from '../model/images'
@@ -14,20 +14,27 @@ export interface SnapshotResult {
 }
 
 /** Render every card and the back to PNG and assemble an Open Playing Cards file. */
-export async function snapshotDeck(deck: Deck, dpi: number, onProgress: (done: number, total: number) => void): Promise<SnapshotResult> {
-  const raster = rasterFor(deck.card, dpi)
+export async function snapshotDeck(deck: Deck, dpi: number, bleedMm: number, onProgress: (done: number, total: number) => void): Promise<SnapshotResult> {
+  const raster = rasterFor(deck.card, dpi, bleedMm)
   const { css, missing } = await fontFaces(deck)
   const targets = [...listCards(deck), 'back' as const]
   const images: Record<string, string> = {}
   for (const [i, card] of targets.entries()) {
     onProgress(i, targets.length)
-    const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} />)
+    const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} bleedMm={bleedMm} />)
     images[card === 'back' ? 'back' : card.id] = await rasterize(markup, css, raster.width, raster.height)
     // Give the browser a frame so the progress text repaints.
     await new Promise((r) => setTimeout(r))
   }
   onProgress(targets.length, targets.length)
-  return { file: buildOpenDeck(deck, images, raster), missingFonts: missing }
+  const draft = buildOpenDeck(deck, images, raster)
+  const file = buildOpenDeck(deck, images, raster, { contentHash: await sha256(hashableJson(draft)), createdAt: draft.createdAt })
+  return { file, missingFonts: missing }
+}
+
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 async function rasterize(markup: string, css: string, width: number, height: number): Promise<string> {

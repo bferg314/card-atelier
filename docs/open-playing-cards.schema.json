@@ -2,13 +2,30 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
+    "$schema": {
+      "description": "Where this file’s JSON Schema lives.",
+      "type": "string"
+    },
     "format": {
       "type": "string",
       "const": "open-playing-cards"
     },
     "version": {
-      "type": "number",
+      "type": "integer",
       "const": 1
+    },
+    "deckId": {
+      "type": "string",
+      "description": "Stable id of the deck, unchanged across exports and edits."
+    },
+    "contentHash": {
+      "description": "SHA-256 of this file with $schema, createdAt, generator and contentHash removed. Equal hashes mean the same deck.",
+      "type": "string"
+    },
+    "deckType": {
+      "description": "Set when the deck is exactly a standard French pack (plus optional jokers).",
+      "type": "string",
+      "const": "french-52"
     },
     "name": {
       "type": "string"
@@ -17,6 +34,14 @@
       "type": "string"
     },
     "description": {
+      "type": "string"
+    },
+    "license": {
+      "description": "How this deck may be used, ideally an SPDX id such as \"CC-BY-4.0\".",
+      "type": "string"
+    },
+    "source": {
+      "description": "Where the deck came from, for attribution.",
       "type": "string"
     },
     "generator": {
@@ -37,13 +62,16 @@
     },
     "createdAt": {
       "type": "string",
-      "description": "ISO 8601 timestamp."
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "When the file was written."
     },
     "card": {
       "type": "object",
       "properties": {
         "widthMm": {
-          "type": "number"
+          "type": "number",
+          "description": "Trim width of the finished card."
         },
         "heightMm": {
           "type": "number"
@@ -51,15 +79,19 @@
         "cornerRadiusMm": {
           "type": "number"
         },
+        "bleedMm": {
+          "description": "Extra image beyond the trim size on every side, for printing. Absent or 0 means the image is trimmed to size.",
+          "type": "number"
+        },
         "imageWidth": {
           "type": "integer",
-          "minimum": -9007199254740991,
+          "minimum": 1,
           "maximum": 9007199254740991,
-          "description": "Pixel width of every image in the file."
+          "description": "Pixel width of every image in the file, bleed included."
         },
         "imageHeight": {
           "type": "integer",
-          "minimum": -9007199254740991,
+          "minimum": 1,
           "maximum": 9007199254740991
         },
         "dpi": {
@@ -93,13 +125,19 @@
             "type": "string",
             "pattern": "^#([0-9a-f]{6}|[0-9a-f]{8})$",
             "description": "Colour as lower-case #rrggbb, or #rrggbbaa when it has transparency."
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "id",
           "name",
           "symbol",
-          "color"
+          "color",
+          "order"
         ]
       }
     },
@@ -130,9 +168,8 @@
       "properties": {
         "image": {
           "type": "string",
-          "format": "starts_with",
-          "pattern": "^data:image\\/png;base64,.*",
-          "description": "PNG image as a base64 data URI."
+          "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$",
+          "description": "PNG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder."
         }
       },
       "required": [
@@ -155,6 +192,12 @@
               "joker"
             ]
           },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Position in play order, so a shuffled or filtered hand can be sorted back."
+          },
           "suit": {
             "description": "Suit id, or null for jokers.",
             "type": [
@@ -170,7 +213,7 @@
             ]
           },
           "value": {
-            "description": "Numeric rank, A = 1 to K = 13; null for jokers.",
+            "description": "Default ordinal for the rank, A = 1 to K = 13; null for jokers. Not a game rule.",
             "type": [
               "number",
               "null"
@@ -191,14 +234,14 @@
           },
           "image": {
             "type": "string",
-            "format": "starts_with",
-            "pattern": "^data:image\\/png;base64,.*",
+            "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$",
             "description": "The card face at card.imageWidth × card.imageHeight, with transparent rounded corners."
           }
         },
         "required": [
           "id",
           "kind",
+          "order",
           "suit",
           "rank",
           "value",
@@ -214,9 +257,8 @@
   "required": [
     "format",
     "version",
+    "deckId",
     "name",
-    "author",
-    "description",
     "generator",
     "createdAt",
     "card",

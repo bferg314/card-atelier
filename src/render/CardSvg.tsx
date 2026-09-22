@@ -11,29 +11,33 @@ interface Props {
   /** A card from listCards(), or 'back'. */
   card: CardRef | 'back'
   className?: string
+  /** Millimetres of printable bleed on every side. With bleed the card is drawn square and edge to edge. */
+  bleedMm?: number
 }
 
 /** Renders one card as SVG in millimetre units, so it scales cleanly at any size. */
-export function CardSvg({ deck, card, className }: Props) {
+export function CardSvg({ deck, card, className, bleedMm = 0 }: Props) {
   const uid = 'c' + useId().replace(/[^a-zA-Z0-9]/g, '')
   const { widthMm: W, heightMm: H, cornerRadiusMm: R, background, border } = deck.card
   const inset = border.widthMm / 2
+  const b = Math.max(0, bleedMm)
   const title = card === 'back' ? `${deck.name} back` : card.kind === 'joker' ? card.joker.label : `${card.rank.label} of ${card.suit.name}`
 
   let body: ReactNode
-  if (card === 'back') body = <BackArt deck={deck} back={deck.back} uid={uid} />
+  if (card === 'back') body = <BackArt deck={deck} back={deck.back} uid={uid} bleed={b} />
   else if (card.kind === 'joker') body = <JokerArt deck={deck} joker={card.joker} uid={uid} />
   else body = <StandardArt deck={deck} card={card} uid={uid} />
 
   return (
-    <svg className={className} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title} xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox={`${-b} ${-b} ${W + 2 * b} ${H + 2 * b}`} role="img" aria-label={title} xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id={`${uid}-card`}>
-          <rect x={0} y={0} width={W} height={H} rx={R} />
+          {/* Bleed is meant to be trimmed off, so it is printed square and to the edge. */}
+          <rect x={-b} y={-b} width={W + 2 * b} height={H + 2 * b} rx={b > 0 ? 0 : R} />
         </clipPath>
       </defs>
       <g clipPath={`url(#${uid}-card)`}>
-        <rect x={0} y={0} width={W} height={H} fill={card === 'back' ? deck.back.colors[0] : background} />
+        <rect x={-b} y={-b} width={W + 2 * b} height={H + 2 * b} fill={card === 'back' ? deck.back.colors[0] : background} />
         {body}
       </g>
       {border.widthMm > 0 && (
@@ -156,7 +160,8 @@ function Corners({ deck, suit, label, lettering }: { deck: Deck; suit: Suit; lab
   const size = base * lettering.scale
   // The top of the label stays put as it grows; the pip moves down to keep clear of any tail.
   const baseline = 9.2 * s - CAP * base + CAP * size
-  const pipSize = 4.4 * s
+  // The pip grows with the letter, so a resized index stays a matched pair.
+  const pipSize = 4.4 * s * lettering.scale
   const pipY = baseline + DESCENT * size + 0.5 * s + pipSize / 2
   const corner = (
     <g transform={`translate(${lettering.x * s} ${lettering.y * s})`}>
@@ -342,7 +347,7 @@ function Jester({ x, y, size, color, accent }: { x: number; y: number; size: num
 
 /* ---------- backs ---------- */
 
-function BackArt({ deck, back, uid }: { deck: Deck; back: Back; uid: string }) {
+function BackArt({ deck, back, uid, bleed }: { deck: Deck; back: Back; uid: string; bleed: number }) {
   const { widthMm: W, heightMm: H, cornerRadiusMm: R } = deck.card
   const s = W / 63.5
   const [c0, c1] = back.colors
@@ -367,8 +372,16 @@ function BackArt({ deck, back, uid }: { deck: Deck; back: Back; uid: string }) {
       <defs>
         <PatternDef id={patternId} pattern={back.pattern} c0={c0} c1={c1} s={s} />
       </defs>
-      {back.border && <rect x={0} y={0} width={W} height={H} fill={c1} opacity={0.12} />}
-      <rect x={x} y={y} width={w} height={h} rx={back.border ? Math.max(0, R - margin / 2) : 0} fill={back.pattern === 'solid' ? c0 : `url(#${patternId})`} />
+      {back.border && <rect x={-bleed} y={-bleed} width={W + 2 * bleed} height={H + 2 * bleed} fill={c1} opacity={0.12} />}
+      {/* Without a border the pattern is the edge of the card, so it runs into the bleed. */}
+      <rect
+        x={back.border ? x : -bleed}
+        y={back.border ? y : -bleed}
+        width={back.border ? w : W + 2 * bleed}
+        height={back.border ? h : H + 2 * bleed}
+        rx={back.border ? Math.max(0, R - margin / 2) : 0}
+        fill={back.pattern === 'solid' ? c0 : `url(#${patternId})`}
+      />
       {back.border && (
         <>
           <rect x={x} y={y} width={w} height={h} rx={Math.max(0, R - margin / 2)} fill="none" stroke={c1} strokeWidth={0.55} />

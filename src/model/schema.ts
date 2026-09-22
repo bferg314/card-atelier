@@ -130,6 +130,8 @@ export const Deck = z.object({
   name: z.string().min(1),
   author: z.string().default(''),
   description: z.string().default(''),
+  license: z.string().default('').describe('How the deck may be used, ideally an SPDX id. Copied into exports.'),
+  source: z.string().default('').describe('Where the deck came from, for attribution in exports.'),
   createdAt: z.string(),
   updatedAt: z.string(),
   card: CardSpec,

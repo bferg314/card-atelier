@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../state/store'
-import { downloadDeck, downloadJson, fileNameFor, openFileNameFor } from '../model/io'
-import { rasterFor } from '../model/open'
-import { Segmented } from './controls'
+import { downloadDeck, downloadFile, downloadJson, fileNameFor, openFileNameFor, openFolderNameFor } from '../model/io'
+import { rasterFor, toFolder } from '../model/open'
+import { zip } from '../model/zip'
+import { Segmented, Toggle } from './controls'
+
 import { createDeck, STANDARD_RANKS, THEMES } from '../model/presets'
 import { listCards } from '../model/resolve'
 import { CardSvg } from '../render/CardSvg'
@@ -217,6 +219,9 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Standard print bleed; enough for any print-on-demand service I know of. */
+const BLEED_MM = 2
+
 const RESOLUTIONS = [
   { value: '150', label: 'Screen' },
   { value: '300', label: 'Print' },
@@ -228,19 +233,32 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const [dpi, setDpi] = useState('150')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const raster = rasterFor(deck.card, Number(dpi))
+  const [bleed, setBleed] = useState(false)
+  const bleedMm = bleed ? BLEED_MM : 0
+  const raster = rasterFor(deck.card, Number(dpi), bleedMm)
   const busy = progress !== null
 
-  async function exportOpen() {
+  async function exportOpen(as: 'json' | 'folder') {
     setWarning(null)
     setProgress({ done: 0, total: listCards(deck).length + 1 })
     try {
       // Loaded on demand: the renderer pulls in react-dom/server, which the editor does not otherwise need.
       const { snapshotDeck } = await import('../render/snapshot')
-      const { file, missingFonts } = await snapshotDeck(deck, Number(dpi), (done, total) => setProgress({ done, total }))
-      const text = JSON.stringify(file)
-      downloadJson(openFileNameFor(deck), text)
-      notify(`Saved ${openFileNameFor(deck)} (${(text.length / 1_048_576).toFixed(1)} MB)`)
+      const { file, missingFonts } = await snapshotDeck(deck, Number(dpi), bleedMm, (done, total) => setProgress({ done, total }))
+      const name = as === 'json' ? openFileNameFor(deck) : openFolderNameFor(deck)
+      const size =
+        as === 'json'
+          ? (() => {
+              const text = JSON.stringify(file)
+              downloadJson(name, text)
+              return text.length
+            })()
+          : (() => {
+              const bytes = zip(toFolder(file))
+              downloadFile(name, new Blob([bytes as BlobPart], { type: 'application/zip' }))
+              return bytes.length
+            })()
+      notify(`Saved ${name} (${(size / 1_048_576).toFixed(1)} MB)`)
       if (missingFonts.length) setWarning(`Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`)
       else onClose()
     } catch (e) {
@@ -277,14 +295,20 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
             Finished card images for games and other programs, with each card's suit, rank and value. It does not depend on Card Atelier, so it keeps working whatever changes here. See <code>docs/open-playing-cards.md</code>.
           </p>
           <Segmented value={dpi} options={RESOLUTIONS} onChange={setDpi} />
+          <Toggle checked={bleed} onChange={setBleed} label={`Add ${BLEED_MM} mm print bleed (square, opaque edges)`} />
           <p className="field-hint">
             {raster.width} × {raster.height} px per card at {dpi} dpi. {dpi === '300' ? 'Sharp in print; a larger file.' : 'Fine on screen; a smaller file.'}
           </p>
           {warning && <p className="field-hint warn">{warning}</p>}
         </div>
-        <button type="button" className="btn primary" disabled={busy} onClick={exportOpen}>
-          {progress ? `Rendering ${progress.done} of ${progress.total}` : 'Download .cards.json'}
-        </button>
+        <div className="button-row">
+          <button type="button" className="btn primary" disabled={busy} onClick={() => exportOpen('json')}>
+            {progress ? `Rendering ${progress.done} of ${progress.total}` : 'One file (.cards.json)'}
+          </button>
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => exportOpen('folder')} title="A zip holding deck.json and one PNG per card, for game engines">
+            Folder of images (.zip)
+          </button>
+        </div>
       </div>
     </Dialog>
   )

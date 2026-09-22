@@ -57,12 +57,19 @@ export function openFileNameFor(deck: Deck): string {
   return `${slug(deck)}.cards.json`
 }
 
+export function openFolderNameFor(deck: Deck): string {
+  return `${slug(deck)}.cards.zip`
+}
+
 export function downloadDeck(deck: Deck): void {
   downloadJson(fileNameFor(deck), serializeDeck(deck))
 }
 
 export function downloadJson(name: string, text: string): void {
-  const blob = new Blob([text], { type: 'application/json' })
+  downloadFile(name, new Blob([text], { type: 'application/json' }))
+}
+
+export function downloadFile(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

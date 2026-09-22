@@ -1,8 +1,8 @@
 # Open Playing Cards format, version 1
 
-A single JSON file that holds a finished deck of playing cards: one PNG image per card, the card back, and the facts a game needs to play with them (suit, rank, numeric value). It says nothing about how the cards were designed, so games that read it keep working whatever happens to the tool that wrote it.
+A deck of playing cards as data a game can use directly: one PNG image per card, the card back, and the facts needed to play with them (suit, rank, numeric value). It says nothing about how the cards were designed, so games that read it keep working whatever happens to the tool that wrote it.
 
-Card Atelier writes these files as `<deck-name>.cards.json` from **Export JSON → Open Playing Cards**. Any other tool is welcome to write them too.
+Card Atelier writes these files from **Export JSON → Open Playing Cards**, either as a single `<deck-name>.cards.json` with the images embedded, or as a `.zip` holding the same document plus the PNGs as files. Any other tool is welcome to write them too.
 
 The machine-readable definition is [`open-playing-cards.schema.json`](open-playing-cards.schema.json) (JSON Schema 2020-12). It is generated from [`src/model/open.ts`](../src/model/open.ts), so the two always agree.
 
@@ -10,22 +10,25 @@ The machine-readable definition is [`open-playing-cards.schema.json`](open-playi
 
 ```jsonc
 {
+  "$schema": "https://raw.githubusercontent.com/bferg314/card-atelier/main/docs/open-playing-cards.schema.json",
   "format": "open-playing-cards",
   "version": 1,
+  "deckId": "k3p2q8x1",
+  "contentHash": "9f2c…",
+  "deckType": "french-52",
   "name": "Classic Deck",
-  "author": "",
-  "description": "",
+  "license": "CC-BY-4.0",
   "generator": { "name": "Card Atelier", "version": "0.1.0" },
   "createdAt": "2026-09-22T15:04:05.000Z",
   "card": { "widthMm": 63.5, "heightMm": 88.9, "cornerRadiusMm": 3.5, "imageWidth": 375, "imageHeight": 525, "dpi": 150 },
-  "suits": [{ "id": "hearts", "name": "Hearts", "symbol": "♥", "color": "#c0162c" }],
+  "suits": [{ "id": "hearts", "name": "Hearts", "symbol": "♥", "color": "#c0162c", "order": 1 }],
   "ranks": [{ "id": "K", "label": "K", "value": 13 }],
   "back": { "image": "data:image/png;base64,…" },
   "cards": [
-    { "id": "hearts-K", "kind": "standard", "suit": "hearts", "rank": "K", "value": 13,
+    { "id": "hearts-K", "kind": "standard", "order": 25, "suit": "hearts", "rank": "K", "value": 13,
       "label": "K♥", "name": "King of Hearts", "color": "#c0162c", "image": "data:image/png;base64,…" },
-    { "id": "joker-1", "kind": "joker", "suit": null, "rank": null, "value": null,
-      "label": "JOKER", "name": "Joker", "color": "#c0162c", "image": "data:image/png;base64,…" }
+    { "id": "joker-1", "kind": "joker", "order": 52, "suit": null, "rank": null, "value": null,
+      "label": "JOKER", "name": "Joker 1", "color": "#c0162c", "image": "data:image/png;base64,…" }
   ]
 }
 ```
@@ -36,33 +39,64 @@ The machine-readable definition is [`open-playing-cards.schema.json`](open-playi
 | --- | --- |
 | `format` | Always `"open-playing-cards"`. |
 | `version` | Always `1` for this document. |
-| `name`, `author`, `description` | Deck metadata. Strings, possibly empty. |
+| `$schema` | Optional. Where to find the schema that validates the file. |
+| `deckId` | A deck's stable id. The same deck exported again, edited or not, keeps this id. |
+| `contentHash` | Optional. SHA-256 over the file with `$schema`, `contentHash`, `createdAt` and `generator` removed. Two files with the same hash hold the same deck; a different hash means something was edited. |
+| `deckType` | Optional. `"french-52"` means the deck is exactly a standard pack under the ids below, so a game needing one can rely on it. Absent means anything else. |
+| `name`, `author`, `description` | Deck metadata. `author` and `description` are omitted when unknown. |
+| `license` | Optional. How the deck may be used, ideally an [SPDX id](https://spdx.org/licenses/) such as `CC-BY-4.0`. Absent means unstated, which is not permission. |
+| `source` | Optional. Where the deck came from, for attribution. |
 | `generator` | `name` and `version` of the program that wrote the file. Informational only; do not branch on it. |
 | `createdAt` | ISO 8601 timestamp of the export. |
-| `card.widthMm`, `card.heightMm`, `card.cornerRadiusMm` | Physical card size, for printing or for sizing cards on screen. |
-| `card.imageWidth`, `card.imageHeight`, `card.dpi` | Pixel size of every image in the file, and the resolution it was rendered at. |
-| `suits[]` | `id`, `name`, `symbol`, `color` for each suit, in deck order. |
+| `card.widthMm`, `card.heightMm`, `card.cornerRadiusMm` | Physical size of the finished (trimmed) card. |
+| `card.bleedMm` | Optional. Extra image beyond the trim size on every side, for printing. Absent or `0` means the images are trimmed to size. |
+| `card.imageWidth`, `card.imageHeight`, `card.dpi` | Pixel size of every image in the file, bleed included, and the resolution it was rendered at. |
+| `suits[]` | `id`, `name`, `symbol`, `color` and `order` for each suit. |
 | `ranks[]` | `id`, `label`, `value` for each rank, in ascending order. |
 | `back.image` | The card back. |
 | `cards[]` | Every card, in play order: suit by suit, ranks ascending, jokers last. |
 | `cards[].id` | Stable id. Standard cards are `<suit id>-<rank id>`, e.g. `hearts-K`. |
 | `cards[].kind` | `"standard"` or `"joker"`. |
+| `cards[].order` | The card's position in play order, so a shuffled or filtered set can be sorted back. |
 | `cards[].suit`, `cards[].rank` | Ids from `suits[]` and `ranks[]`; `null` for jokers. |
-| `cards[].value` | Numeric rank (A = 1 … K = 13 in a standard deck); `null` for jokers. |
-| `cards[].label`, `cards[].name` | Short and long display names, e.g. `K♥` and `King of Hearts`. |
+| `cards[].value` | Default ordinal for the rank; `null` for jokers. See the note below. |
+| `cards[].label`, `cards[].name` | Short and long display names, e.g. `K♥` and `King of Hearts`. Repeated names, such as two jokers, are numbered. |
 | `cards[].color` | The card's main ink colour. |
 | `cards[].image` | The card face. |
 
 Colours are lower-case `#rrggbb`, or `#rrggbbaa` when they carry transparency.
 
-Images are PNG, base64-encoded as `data:image/png;base64,…` URIs. Every image is exactly `card.imageWidth × card.imageHeight` pixels. The area outside the rounded corners is transparent.
+Images are PNG. In a single-file deck each `image` is a `data:image/png;base64,…` URI; in a zipped deck it is a path relative to the JSON, such as `cards/hearts-K.png`. Every image is exactly `card.imageWidth × card.imageHeight`. Without bleed, the area outside the rounded corners is transparent; with bleed, images are square and fully opaque.
+
+### The standard French pack
+
+When `deckType` is `"french-52"`, these ids are guaranteed, and a reader can map from id to meaning without inspecting anything else:
+
+- Suits: `spades`, `hearts`, `diamonds`, `clubs`, in that order.
+- Ranks: `A`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `J`, `Q`, `K`, in that order.
+- 52 cards, plus any number of jokers with `kind: "joker"`.
+
+A game that needs a French deck should check `deckType` and refuse the file cleanly if it is absent, rather than guessing from suit names.
+
+### `value` is a default, not a rule
+
+`value` numbers the ranks in their conventional order, Ace low at 1 through King at 13. It is a convenience for sorting, not a statement about any game. A game where Aces are high, or where a Queen outranks a King, maps from `rank` id to its own values and ignores `value`.
 
 ## Rules for readers
 
 1. Check `format` and `version` before anything else. Reject a `version` you do not know; a future version may change meaning.
-2. Ignore fields you do not recognise. Later minor additions will add fields rather than change existing ones, so older readers keep working.
-3. Do not assume 52 cards, four suits or thirteen ranks. Read `cards[]`; use `suits[]` and `ranks[]` for ordering and grouping.
+2. Ignore fields you do not recognise. Later additions add fields rather than change existing ones, so older readers keep working.
+3. Do not assume 52 cards, four suits or thirteen ranks unless `deckType` says so. Read `cards[]`; use `suits[]` and `ranks[]` for ordering and grouping.
 4. Treat `id` as the key for a card. Labels and names are for display.
+5. Accept both packagings: `image` may be a `data:` URI or a relative path.
+
+## Using the images
+
+**Decode once.** A 54-card deck is several megabytes of base64. Turn each `image` into a blob or an object URL (or a texture) once at load, and keep that. Holding the data URI strings in UI state, or passing them as component props, costs memory and re-renders for nothing.
+
+**Small sizes.** The images are drawn in print proportions, so a corner index is around 6% of the card's height. Painted at 300 px that is legible; at 30 px it is two pixels of ink. If your game draws cards smaller than roughly 60 px wide, draw your own rank and suit badge over the image rather than relying on the printed index. Decks meant for screen play can also be exported with oversized indices: in Card Atelier, Artwork → Lettering → **Oversize for digital play**.
+
+**Printing.** Export with bleed, place the images on your sheet at `widthMm + 2 × bleedMm`, and trim at the card size.
 
 ## Minimal readers
 
@@ -71,10 +105,10 @@ JavaScript (browser or Node):
 ```js
 const deck = JSON.parse(text)
 if (deck.format !== 'open-playing-cards' || deck.version !== 1) throw new Error('Unsupported deck file')
+if (deck.deckType !== 'french-52') throw new Error('This game needs a standard 52-card deck')
 
+const textures = new Map(deck.cards.map((c) => [c.id, c.image]))  // decode once, reuse everywhere
 const drawPile = [...deck.cards]
-const img = new Image()
-img.src = drawPile[0].image   // data URIs work directly as an image source
 ```
 
 Python:
@@ -93,4 +127,13 @@ for card in deck["cards"]:
         out.write(png)
 ```
 
-Engines that load images from bytes (Godot's `Image.load_png_from_buffer`, Unity's `Texture2D.LoadImage`, pygame via `io.BytesIO`) take the decoded PNG the same way.
+Engines that load images from bytes (Godot's `Image.load_png_from_buffer`, Unity's `Texture2D.LoadImage`, pygame via `io.BytesIO`) take the decoded PNG the same way. For those, prefer the zipped export and load the PNG files directly.
+
+## Changes
+
+Version 1 gained these optional fields after the first game integration. Readers written against the original v1 are unaffected, since every addition is optional and rule 2 tells readers to ignore what they do not know.
+
+- `$schema`, `deckId`, `contentHash`, `deckType`, `license`, `source`
+- `cards[].order`, `suits[].order`, `card.bleedMm`
+- `image` may now be a relative path, for zipped decks
+- `author` and `description` are omitted when empty rather than written as `""`

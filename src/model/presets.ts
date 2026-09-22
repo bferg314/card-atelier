@@ -118,6 +118,8 @@ export function createDeck(themeKey = 'classic', name?: string): Deck {
     name: name ?? `${theme.name} Deck`,
     author: '',
     description: '',
+    license: '',
+    source: '',
     createdAt: now,
     updatedAt: now,
     card: {
