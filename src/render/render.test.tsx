@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createDeck } from '../model/presets'
 import { listCards } from '../model/resolve'
 import { CardSvg } from './CardSvg'
+import { sizedSvg } from './snapshot'
 
 const deck = createDeck()
 const card = listCards(deck).find((c) => c.id === 'hearts-K')!
@@ -28,5 +29,16 @@ describe('card rendering', () => {
     const plain = { ...deck, back: { ...deck.back, border: false } }
     const svg = renderToStaticMarkup(<CardSvg deck={plain} card="back" bleedMm={2} />)
     expect(svg).toContain('width="67.5" height="92.9"')
+  })
+})
+
+describe('rasterised markup', () => {
+  it('fills the bitmap exactly, so bleed edges stay opaque', () => {
+    const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} bleedMm={2} />)
+    const svg = sizedSvg(markup, '@font-face{}', 399, 549)
+    // 2 mm of bleed at 150 dpi is 11.81 px, so the pixel size rounds and its ratio no longer matches the card's.
+    expect(svg).toContain('width="399" height="549" preserveAspectRatio="none"')
+    expect(svg).toContain('<style>@font-face{}</style>')
+    expect(svg.indexOf('<style>')).toBeLessThan(svg.indexOf('<defs>'))
   })
 })

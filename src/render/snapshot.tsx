@@ -33,9 +33,21 @@ export async function snapshotDeck(deck: Deck, dpi: number, bleedMm: number, onP
   return { file, missingFonts: missing }
 }
 
-async function rasterize(markup: string, css: string, width: number, height: number): Promise<string> {
+/**
+ * The card's SVG prepared for rasterising at an exact pixel size.
+ *
+ * `preserveAspectRatio="none"` matters: the pixel size is rounded from millimetres, so its ratio differs from the
+ * card's by a fraction of a percent, and the default "meet" would letterbox the drawing by a twentieth of a pixel.
+ * That left the outer pixel columns of a bleed export partly transparent, where the spec promises opaque edges.
+ * Stretching instead distorts by about 0.03%, far below anything visible.
+ */
+export function sizedSvg(markup: string, css: string, width: number, height: number): string {
   // An SVG drawn as an image cannot see page fonts or fetch anything, so fonts ride along as data URIs.
-  const svg = markup.replace(/^<svg /, `<svg width="${width}" height="${height}" `).replace(/^(<svg[^>]*>)/, `$1<style>${css}</style>`)
+  return markup.replace(/^<svg /, `<svg width="${width}" height="${height}" preserveAspectRatio="none" `).replace(/^(<svg[^>]*>)/, `$1<style>${css}</style>`)
+}
+
+async function rasterize(markup: string, css: string, width: number, height: number): Promise<string> {
+  const svg = sizedSvg(markup, css, width, height)
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
   try {
     const img = new Image()
