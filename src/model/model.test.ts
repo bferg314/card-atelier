@@ -63,3 +63,16 @@ describe('art prompt', () => {
     expect(text).toContain('Aspect ratio 5:4 landscape, at least 480 × 390 px.')
   })
 })
+
+describe('rank lettering', () => {
+  it('fills defaults for decks saved before lettering existed, and round trips changes', () => {
+    const deck = createDeck()
+    const old = JSON.parse(serializeDeck(deck))
+    for (const r of old.ranks) delete r.lettering
+    const loaded = parseDeck(JSON.stringify(old))
+    expect(loaded.ranks[10].lettering).toEqual({ corner: { scale: 1, x: 0, y: 0 }, monogram: { scale: 1, y: 0 } })
+
+    loaded.ranks[10].lettering.monogram = { scale: 1.2, y: -3 }
+    expect(parseDeck(serializeDeck(loaded)).ranks[10].lettering.monogram).toEqual({ scale: 1.2, y: -3 })
+  })
+})

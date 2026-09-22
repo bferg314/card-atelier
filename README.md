@@ -21,7 +21,7 @@ Everything a game needs is in one file. Images and uploaded fonts are embedded a
 | `name`, `author`, `description` | Deck metadata. |
 | `card` | Physical size in mm (`widthMm`, `heightMm`, `cornerRadiusMm`), `background`, `border`, `accent` colors. |
 | `suits[]` | `id`, `name`, `symbol`, `color`, `font` (`family`, `weight`), optional `pipImage`. |
-| `ranks[]` | `id`, `label`, numeric `value` (A = 1 … K = 13). |
+| `ranks[]` | `id`, `label`, numeric `value` (A = 1 … K = 13), `lettering` (size and mm offsets for the corner index and court monogram, shared by every card of that rank). |
 | `faces` | Pictures keyed by card id (`"hearts-K"`): `image`, `fit` (`scale`, `x`, `y`), `mirror`. |
 | `back` | `kind` (`pattern` or `image`), `pattern`, `colors` [ground, ink], `image`, `border`. |
 | `jokers` | `enabled` and `items[]` (`id`, `label`, `color`, `font`, `image`). |

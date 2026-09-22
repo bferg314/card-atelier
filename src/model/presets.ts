@@ -1,6 +1,6 @@
-import { DECK_FORMAT, DECK_VERSION, type Deck, type Rank, type Suit } from './schema'
+import { DECK_FORMAT, DECK_VERSION, defaultLettering, type Deck, type Rank, type Suit } from './schema'
 
-export const STANDARD_RANKS: Rank[] = [
+export const STANDARD_RANKS: Omit<Rank, 'lettering'>[] = [
   { id: 'A', label: 'A', value: 1 },
   { id: '2', label: '2', value: 2 },
   { id: '3', label: '3', value: 3 },
@@ -130,7 +130,7 @@ export function createDeck(themeKey = 'classic', name?: string): Deck {
     },
     fonts: families.map((family) => ({ family, source: 'google' as const })),
     suits: suits(theme),
-    ranks: STANDARD_RANKS.map((r) => ({ ...r })),
+    ranks: STANDARD_RANKS.map((r) => ({ ...r, lettering: defaultLettering() })),
     faces: {},
     back: structuredClone(theme.back),
     jokers: {

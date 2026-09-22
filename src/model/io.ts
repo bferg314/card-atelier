@@ -33,6 +33,14 @@ export function parseDeck(text: string): Deck {
   return deck
 }
 
+/** Fill defaults on a deck read back from browser storage. Stored decks skip import validation, so fields added since they were saved would otherwise be missing. */
+export function normalizeDeck(stored: Deck): Deck {
+  const result = Deck.safeParse(stored)
+  if (!result.success) return stored
+  const { cards: _ignored, ...deck } = result.data
+  return deck
+}
+
 export function fileNameFor(deck: Deck): string {
   const slug = deck.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'deck'
   return `${slug}.deck.json`

@@ -32,10 +32,32 @@ export const Suit = z.object({
   pipImage: dataUri.nullable().default(null),
 })
 
+/** Per-rank nudges to the corner index and court monogram. Offsets are mm at poker width and scale with the card. */
+export const Lettering = z.object({
+  corner: z
+    .object({
+      scale: z.number().min(0.5).max(2).default(1),
+      x: z.number().min(-5).max(5).default(0),
+      y: z.number().min(-5).max(5).default(0),
+    })
+    .default({ scale: 1, x: 0, y: 0 }),
+  monogram: z
+    .object({
+      scale: z.number().min(0.5).max(2).default(1),
+      y: z.number().min(-15).max(15).default(0),
+    })
+    .default({ scale: 1, y: 0 }),
+})
+
+export function defaultLettering(): Lettering {
+  return { corner: { scale: 1, x: 0, y: 0 }, monogram: { scale: 1, y: 0 } }
+}
+
 export const Rank = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   value: z.number(),
+  lettering: Lettering.default(defaultLettering),
 })
 
 export const Face = z.object({
@@ -108,6 +130,7 @@ export type FontSource = z.infer<typeof FontSource>
 export type ImageFit = z.infer<typeof ImageFit>
 export type Suit = z.infer<typeof Suit>
 export type Rank = z.infer<typeof Rank>
+export type Lettering = z.infer<typeof Lettering>
 export type Face = z.infer<typeof Face>
 export type Back = z.infer<typeof Back>
 export type BackPattern = (typeof BACK_PATTERNS)[number]

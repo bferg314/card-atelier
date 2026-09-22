@@ -2,7 +2,7 @@ import { useStore } from '../state/store'
 import { findCard, listCards } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox, artPrompt, cardSubject, ratioAdvice, type ArtArea } from '../model/artbox'
-import { BACK_PATTERNS, type BackPattern, type Deck, type Joker } from '../model/schema'
+import { BACK_PATTERNS, defaultLettering, type BackPattern, type Deck, type Joker } from '../model/schema'
 import { CardSvg } from '../render/CardSvg'
 import { ColorField, Field, FitControls, FontPicker, ImageDrop, Section, Segmented, Slider, TextField, Toggle } from './controls'
 
@@ -168,6 +168,7 @@ export function ArtworkPanel() {
         )}
         {!face.image && FACE_RANKS.has(card.rank.id) && <p className="field-hint">Without a picture this card shows a typographic monogram in the suit’s typeface.</p>}
       </Section>
+      <LetteringControls rankId={card.rank.id} monogram={FACE_RANKS.has(card.rank.id) && !face.image} />
       {face.image && (
         <Section title="Copy to">
           <div className="button-row">
@@ -376,5 +377,54 @@ function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; 
         Copy prompt
       </button>
     </div>
+  )
+}
+
+/** Size and position of the corner index and court monogram, shared by every card of one rank. */
+function LetteringControls({ rankId, monogram }: { rankId: string; monogram: boolean }) {
+  const index = useStore((s) => s.deck.ranks.findIndex((r) => r.id === rankId))
+  const rank = useStore((s) => s.deck.ranks[index])
+  const update = useStore((s) => s.update)
+  if (!rank) return null
+  const { corner, monogram: mono } = rank.lettering
+  const set = (field: string, fn: (l: typeof rank.lettering) => void) => update((d) => fn(d.ranks[index].lettering), `letter-${rankId}-${field}`)
+  const pct = (v: number) => `${Math.round(v * 100)}%`
+  const offset = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)} mm`
+  const changed = JSON.stringify(rank.lettering) !== JSON.stringify(defaultLettering())
+  return (
+    <Section
+      title={`Lettering (every ${rank.label})`}
+      aside={
+        changed && (
+          <button type="button" className="btn ghost small" onClick={() => update((d) => void (d.ranks[index].lettering = defaultLettering()))}>
+            Reset
+          </button>
+        )
+      }
+    >
+      <div className="fit-controls">
+        <p className="field-hint">Corner index</p>
+        <Field label="Size">
+          <Slider value={corner.scale} min={0.5} max={2} step={0.01} onChange={(v) => set('corner-scale', (l) => void (l.corner.scale = v))} format={pct} />
+        </Field>
+        <Field label="Horizontal">
+          <Slider value={corner.x} min={-5} max={5} step={0.1} onChange={(v) => set('corner-x', (l) => void (l.corner.x = v))} format={offset} />
+        </Field>
+        <Field label="Vertical">
+          <Slider value={corner.y} min={-5} max={5} step={0.1} onChange={(v) => set('corner-y', (l) => void (l.corner.y = v))} format={offset} />
+        </Field>
+        {monogram && (
+          <>
+            <p className="field-hint">Centre monogram</p>
+            <Field label="Size">
+              <Slider value={mono.scale} min={0.5} max={2} step={0.01} onChange={(v) => set('monogram-scale', (l) => void (l.monogram.scale = v))} format={pct} />
+            </Field>
+            <Field label="Vertical">
+              <Slider value={mono.y} min={-15} max={15} step={0.1} onChange={(v) => set('monogram-y', (l) => void (l.monogram.y = v))} format={offset} />
+            </Field>
+          </>
+        )}
+      </div>
+    </Section>
   )
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { del, get, set } from 'idb-keyval'
 import { createDeck, newId } from '../model/presets'
-import { parseDeck } from '../model/io'
+import { normalizeDeck, parseDeck } from '../model/io'
 import type { Deck } from '../model/schema'
 import { loadDeckFonts } from '../fonts/fonts'
 import { syncFonts } from '../model/fontsync'
@@ -100,7 +100,7 @@ export const useStore = create<State>((setState, getState) => {
         const stored = currentId ? ((await get(deckKey(currentId))) as Deck | undefined) : undefined
         setState({ library })
         if (stored) {
-          switchTo(stored)
+          switchTo(normalizeDeck(stored))
         } else {
           switchTo(getState().deck)
         }
@@ -166,7 +166,7 @@ export const useStore = create<State>((setState, getState) => {
         setState({ library: getState().library.filter((l) => l.id !== id) })
         return
       }
-      switchTo(stored)
+      switchTo(normalizeDeck(stored))
     },
 
     async deleteDeck(id) {

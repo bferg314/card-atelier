@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import type { Back, Deck, FontRef, ImageFit, Joker, Suit } from '../model/schema'
+import type { Back, Deck, FontRef, ImageFit, Joker, Lettering, Suit } from '../model/schema'
 import type { CardRef } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox } from '../model/artbox'
@@ -112,16 +112,26 @@ function Panel({ x, y, w, h, accent, children }: { x: number; y: number; w: numb
 
 /* ---------- standard cards ---------- */
 
-function Corners({ deck, suit, label }: { deck: Deck; suit: Suit; label: string }) {
+/** Room kept below the baseline for letters with a tail (J, Q), as a fraction of the font size. */
+const DESCENT = 0.3
+/** Cap height as a fraction of the font size, used to keep the top of a resized corner label in place. */
+const CAP = 0.7
+
+function Corners({ deck, suit, label, lettering }: { deck: Deck; suit: Suit; label: string; lettering: Lettering['corner'] }) {
   const { widthMm: W, heightMm: H } = deck.card
   const s = W / 63.5
-  const size = label.length > 1 ? 6.2 * s : 7.2 * s
+  const base = label.length > 1 ? 6.2 * s : 7.2 * s
+  const size = base * lettering.scale
+  // The top of the label stays put as it grows; the pip moves down to keep clear of any tail.
+  const baseline = 9.2 * s - CAP * base + CAP * size
+  const pipSize = 4.4 * s
+  const pipY = baseline + DESCENT * size + 0.5 * s + pipSize / 2
   const corner = (
-    <g>
-      <text x={5 * s} y={9.2 * s} fontSize={size} textAnchor="middle" fill={suit.color} letterSpacing={label.length > 1 ? -0.4 * s : 0} {...fontProps(suit.font)}>
+    <g transform={`translate(${lettering.x * s} ${lettering.y * s})`}>
+      <text x={5 * s} y={baseline} fontSize={size} textAnchor="middle" fill={suit.color} letterSpacing={label.length > 1 ? -0.4 * s * lettering.scale : 0} {...fontProps(suit.font)}>
         {label}
       </text>
-      <Pip suit={suit} x={5 * s} y={13.4 * s} size={4.4 * s} />
+      <Pip suit={suit} x={5 * s} y={pipY} size={pipSize} />
     </g>
   )
   return (
@@ -159,7 +169,7 @@ function StandardArt({ deck, card, uid }: { deck: Deck; card: Extract<CardRef, {
       )
     }
   } else if (FACE_RANKS.has(rank.id)) {
-    center = <CourtMonogram deck={deck} suit={suit} label={rank.label} x={px} y={py} w={pw} h={ph} />
+    center = <CourtMonogram deck={deck} suit={suit} label={rank.label} lettering={rank.lettering.monogram} clipId={`${uid}-mono`} x={px} y={py} w={pw} h={ph} />
   } else if (rank.value === 1 || rank.id === 'A') {
     center = <AceArt deck={deck} suit={suit} />
   } else {
@@ -186,7 +196,7 @@ function StandardArt({ deck, card, uid }: { deck: Deck; card: Extract<CardRef, {
   return (
     <>
       {center}
-      <Corners deck={deck} suit={suit} label={rank.label} />
+      <Corners deck={deck} suit={suit} label={rank.label} lettering={rank.lettering.corner} />
     </>
   )
 }
@@ -209,15 +219,20 @@ function AceArt({ deck, suit }: { deck: Deck; suit: Suit }) {
   )
 }
 
-function CourtMonogram({ deck, suit, label, x, y, w, h }: { deck: Deck; suit: Suit; label: string; x: number; y: number; w: number; h: number }) {
+function CourtMonogram({ deck, suit, label, lettering, clipId, x, y, w, h }: { deck: Deck; suit: Suit; label: string; lettering: Lettering['monogram']; clipId: string; x: number; y: number; w: number; h: number }) {
   const { widthMm: W, heightMm: H, accent } = deck.card
   const s = W / 63.5
+  const fontSize = 18 * s * lettering.scale
+  const pipY = y + h * 0.385
+  const pipSize = 5.6 * s
+  // Sit the baseline high enough that a tail (J, Q) clears the pip, then apply the rank's own nudge.
+  const baseline = pipY - pipSize / 2 - 1.2 * s - DESCENT * fontSize + lettering.y * s
   const half = (
     <g>
-      <text x={W / 2} y={y + h * 0.22} fontSize={18 * s} textAnchor="middle" dominantBaseline="central" fill={suit.color} {...fontProps(suit.font)}>
+      <text x={W / 2} y={baseline} fontSize={fontSize} textAnchor="middle" fill={suit.color} {...fontProps(suit.font)}>
         {label}
       </text>
-      <Pip suit={suit} x={W / 2} y={y + h * 0.385} size={5.6 * s} />
+      <Pip suit={suit} x={W / 2} y={pipY} size={pipSize} />
       <circle cx={W / 2 - 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />
       <circle cx={W / 2 + 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />
       <path
@@ -230,9 +245,17 @@ function CourtMonogram({ deck, suit, label, x, y, w, h }: { deck: Deck; suit: Su
   )
   return (
     <Panel x={x} y={y} w={w} h={h} accent={accent}>
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={x} y={y} width={w} height={h} />
+        </clipPath>
+      </defs>
       <rect x={x} y={y} width={w} height={h} fill={suit.color} opacity={0.05} />
-      {half}
-      <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
+      {/* A nudged or enlarged letter is trimmed by the frame rather than running over it. */}
+      <g clipPath={`url(#${clipId})`}>
+        {half}
+        <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
+      </g>
       <line x1={x} y1={H / 2} x2={x + w} y2={H / 2} stroke={accent} strokeWidth={0.3} />
       <circle cx={W / 2} cy={H / 2} r={1.1 * s} fill={accent} />
     </Panel>
