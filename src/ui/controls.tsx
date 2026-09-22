@@ -29,16 +29,66 @@ export function useFieldLabel(): { 'aria-labelledby'?: string } {
   return id ? { 'aria-labelledby': id } : {}
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({ label, children, hint, help }: { label: string; children: ReactNode; hint?: string; help?: ReactNode }) {
   const id = useId()
   return (
     <div className="field">
-      <span className="field-label" id={id}>
-        {label}
+      <span className="field-head">
+        <span className="field-label" id={id}>
+          {label}
+        </span>
+        {help}
       </span>
       <FieldLabel.Provider value={id}>{children}</FieldLabel.Provider>
       {hint && <span className="field-hint">{hint}</span>}
     </div>
+  )
+}
+
+/**
+ * A "?" that explains something on hover or keyboard focus. The bubble is placed in viewport coordinates and
+ * clamped to the window, because the panel it lives in scrolls and would otherwise cut it off at its edge.
+ */
+export function HelpTip({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
+  const mark = useRef<HTMLButtonElement>(null)
+  const [at, setAt] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
+
+  function show() {
+    const r = mark.current?.getBoundingClientRect()
+    if (!r) return
+    const width = Math.min(320, window.innerWidth - 24)
+    setAt({
+      top: r.bottom + 8,
+      left: Math.min(Math.max(12, r.left - 8), window.innerWidth - width - 12),
+      width,
+      maxHeight: window.innerHeight - r.bottom - 20,
+    })
+  }
+
+  return (
+    <span className="help-tip" onMouseEnter={show} onMouseLeave={() => setAt(null)}>
+      <button type="button" ref={mark} className="help-mark" aria-label={label} aria-describedby={id} onFocus={show} onBlur={() => setAt(null)}>
+        ?
+      </button>
+      {at && (
+        <span role="tooltip" id={id} className="help-bubble" style={at}>
+          {children}
+        </span>
+      )}
+    </span>
+  )
+}
+
+export function Select<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <select className="input" value={value} onChange={(e) => onChange(e.target.value as T)} {...useFieldLabel()}>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   )
 }
 

@@ -2,7 +2,7 @@
 
 A deck of playing cards as data a game can use directly: one PNG image per card, the card back, and the facts needed to play with them (suit, rank, numeric value). It says nothing about how the cards were designed, so games that read it keep working whatever happens to the tool that wrote it.
 
-Card Atelier writes these files from **Export JSON → Open Playing Cards**, either as a single `<deck-name>.cards.json` with the images embedded, or as a `.zip` holding the same document plus the PNGs as files. Any other tool is welcome to write them too.
+Card Atelier writes these files from **Export → Open Playing Cards**, either as a single `<deck-name>.cards.json` with the images embedded, or as a `.zip` holding the same document plus the PNGs as files. Any other tool is welcome to write them too.
 
 The machine-readable definition is [`open-playing-cards.schema.json`](open-playing-cards.schema.json) (JSON Schema 2020-12). It is generated from [`src/model/open.ts`](../src/model/open.ts), so the two always agree.
 
@@ -44,7 +44,7 @@ The machine-readable definition is [`open-playing-cards.schema.json`](open-playi
 | `contentHash` | Optional. SHA-256 over the file with `$schema`, `contentHash`, `createdAt` and `generator` removed. Two files with the same hash hold the same deck; a different hash means something was edited. |
 | `deckType` | Optional. `"french-52"` means the deck is exactly a standard pack under the ids below, so a game needing one can rely on it. Absent means anything else. |
 | `name`, `author`, `description` | Deck metadata. `author` and `description` are omitted when unknown. |
-| `license` | Optional. How the deck may be used, ideally an [SPDX id](https://spdx.org/licenses/) such as `CC-BY-4.0`. Absent means unstated, which is not permission. |
+| `license` | Optional. How the deck may be used, ideally an [SPDX id](https://spdx.org/licenses/) such as `CC-BY-4.0`. Absent means unstated, which is not permission. See [what a licence covers](#what-a-licence-covers). |
 | `source` | Optional. Where the deck came from, for attribution. |
 | `generator` | `name` and `version` of the program that wrote the file. Informational only; do not branch on it. |
 | `createdAt` | ISO 8601 timestamp of the export. |
@@ -81,6 +81,12 @@ A game that needs a French deck should check `deckType` and refuse the file clea
 ### `value` is a default, not a rule
 
 `value` numbers the ranks in their conventional order, Ace low at 1 through King at 13. It is a convenience for sorting, not a statement about any game. A game where Aces are high, or where a Queen outranks a King, maps from `rank` id to its own values and ignores `value`.
+
+### What a licence covers
+
+`license` states what the deck's author allows for the deck as published. It cannot grant rights the author never held: artwork, photographs or generated images brought into a deck keep whatever terms they came with, and a permissive `license` does not override them. A reader relying on a deck for anything that matters should know where it came from, which is what `source` is for.
+
+Fonts are a narrower question, and they do not arise here. These files hold rendered images, so a picture set in an OFL font carries no font obligations, and there is no font file to pass on. Only the editor's own project file (`.deck.json` in Card Atelier) embeds uploaded font files, and sharing one of those redistributes the font, which the font's own licence governs.
 
 ## Rules for readers
 

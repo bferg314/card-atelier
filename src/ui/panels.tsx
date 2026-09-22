@@ -1,10 +1,11 @@
+import { useState } from 'react'
 import { useStore } from '../state/store'
 import { findCard, listCards } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox, artPrompt, cardSubject, ratioAdvice, type ArtArea } from '../model/artbox'
 import { BACK_PATTERNS, defaultArtFrame, defaultLettering, FRAME_SHAPES, type BackPattern, type Deck, type Joker } from '../model/schema'
 import { CardSvg } from '../render/CardSvg'
-import { ColorField, Field, FitControls, FontPicker, ImageDrop, Section, Segmented, Slider, TextField, Toggle } from './controls'
+import { ColorField, Field, FitControls, FontPicker, HelpTip, ImageDrop, Section, Segmented, Select, Slider, TextField, Toggle } from './controls'
 
 const SIZES = [
   { key: 'poker', label: 'Poker', w: 63.5, h: 88.9 },
@@ -14,6 +15,54 @@ const SIZES = [
 ]
 
 const mm = (v: number) => `${v.toFixed(1)} mm`
+
+/** Licences worth offering for a deck. The ids are SPDX where SPDX has one; "" means the deck says nothing. */
+const LICENCES = [
+  { value: '', label: 'Unstated', blurb: 'The file says nothing, which is not permission. Anyone wanting to use the deck has to ask you.' },
+  { value: 'CC-BY-4.0', label: 'CC BY 4.0', blurb: 'Anyone may use the deck, including in a game they sell, as long as they credit you. A good default for sharing.' },
+  { value: 'CC0-1.0', label: 'CC0 1.0', blurb: 'You give the deck to the public domain: any use, no credit needed, no conditions.' },
+  { value: 'CC-BY-SA-4.0', label: 'CC BY-SA 4.0', blurb: 'Credit you, and decks derived from this one must carry the same licence. Awkward for games mixing assets.' },
+  { value: 'All rights reserved', label: 'All rights reserved', blurb: 'An explicit no: the deck is yours and nobody may reuse it.' },
+  { value: 'other', label: 'Other…', blurb: 'Anything else, written out. An SPDX id such as MIT reads most clearly to other programs.' },
+]
+
+/** The deck's licence: a pick from the common ones, falling back to free text. Copied into the game export. */
+function LicenceField() {
+  const license = useStore((s) => s.deck.license)
+  const update = useStore((s) => s.update)
+  // "Other…" is a mode, not a value: an empty box under it still means unstated, and would otherwise snap the
+  // picker back to Unstated as soon as it was chosen.
+  const [writingOwn, setWritingOwn] = useState(false)
+  const known = LICENCES.some((l) => l.value === license && l.value !== 'other')
+  const choice = known && !writingOwn ? license : 'other'
+  return (
+    <Field
+      label="Licence"
+      hint="Written into the Open Playing Cards export"
+      help={
+        <HelpTip label="What these licences mean">
+          <strong>How others may use this deck</strong>
+          {LICENCES.map((l) => (
+            <span key={l.value || 'none'}>
+              <em>{l.label}</em> {l.blurb}
+            </span>
+          ))}
+          <span>The licence covers the deck you made, not artwork or fonts you brought to it.</span>
+        </HelpTip>
+      }
+    >
+      <Select
+        value={choice}
+        options={LICENCES.map(({ value, label }) => ({ value, label }))}
+        onChange={(v) => {
+          setWritingOwn(v === 'other')
+          if (v !== 'other') update((d) => void (d.license = v))
+        }}
+      />
+      {choice === 'other' && <TextField value={license} placeholder="e.g. MIT" maxLength={80} onChange={(v) => update((d) => void (d.license = v), 'license')} />}
+    </Field>
+  )
+}
 
 export function DeckPanel() {
   const deck = useStore((s) => s.deck)
@@ -31,9 +80,7 @@ export function DeckPanel() {
           <TextField value={deck.author} placeholder="Your name" maxLength={80} onChange={(v) => update((d) => void (d.author = v), 'author')} />
         </Field>
         <div className="row2">
-          <Field label="Licence" hint="Used in the Open Playing Cards export, e.g. CC-BY-4.0">
-            <TextField value={deck.license} placeholder="All rights reserved" maxLength={80} onChange={(v) => update((d) => void (d.license = v), 'license')} />
-          </Field>
+          <LicenceField />
           <Field label="Source">
             <TextField value={deck.source} placeholder="https://…" maxLength={200} onChange={(v) => update((d) => void (d.source = v), 'source')} />
           </Field>
