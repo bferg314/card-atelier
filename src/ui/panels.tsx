@@ -425,6 +425,20 @@ function LetteringControls({ rankId, monogram }: { rankId: string; monogram: boo
           </>
         )}
       </div>
+      <div className="button-row">
+        <button type="button" className="btn ghost small" onClick={() => update((d) => d.ranks.forEach((r) => (r.lettering.corner = { ...corner })))}>
+          Corner to every rank
+        </button>
+        {monogram && (
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => update((d) => d.ranks.filter((r) => FACE_RANKS.has(r.id)).forEach((r) => (r.lettering.monogram = { ...mono })))}
+          >
+            Monogram to J, Q and K
+          </button>
+        )}
+      </div>
     </Section>
   )
 }
