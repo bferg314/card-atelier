@@ -1171,3 +1171,14 @@ select.input optgroup {
     animation: none !important;
   }
 }
+
+.art-guide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.art-guide p {
+  margin: 0;
+}

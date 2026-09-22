@@ -1,7 +1,7 @@
 import { useStore } from '../state/store'
 import { findCard, listCards } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
-import { artBox, ratioAdvice } from '../model/artbox'
+import { artBox, artPrompt, cardSubject, ratioAdvice, type ArtArea } from '../model/artbox'
 import { BACK_PATTERNS, type BackPattern, type Deck, type Joker } from '../model/schema'
 import { CardSvg } from '../render/CardSvg'
 import { ColorField, Field, FitControls, FontPicker, ImageDrop, Section, Segmented, Slider, TextField, Toggle } from './controls'
@@ -137,6 +137,7 @@ export function ArtworkPanel() {
   if (card.kind === 'joker') return <JokerEditor index={deck.jokers.items.findIndex((j) => j.id === card.id)} />
 
   const face = card.face ?? { image: null, fit: { scale: 1, x: 0, y: 0 }, mirror: true }
+  const subject = { subject: cardSubject(card.rank, card.suit.name), court: FACE_RANKS.has(card.rank.id), colors: [card.suit.color, deck.card.accent] }
   const setFace = (patch: Partial<typeof face>, key?: string) =>
     update((d) => {
       const next = { ...face, ...patch }
@@ -152,11 +153,11 @@ export function ArtworkPanel() {
       <Section title={`${card.rank.label} of ${card.suit.name}`}>
         <ImageDrop value={face.image} onChange={(image) => setFace({ image })} />
         {face.image ? (
-          <ArtGuide card={deck.card} area={face.mirror ? 'half' : 'full'} />
+          <ArtGuide card={deck.card} area={face.mirror ? 'half' : 'full'} {...subject} />
         ) : (
           <>
-            <ArtGuide card={deck.card} area="half" />
-            <ArtGuide card={deck.card} area="full" />
+            <ArtGuide card={deck.card} area="half" {...subject} />
+            <ArtGuide card={deck.card} area="full" {...subject} />
           </>
         )}
         {face.image && (
@@ -229,7 +230,7 @@ export function BackPanel() {
         ) : (
           <>
             <ImageDrop value={back.image} onChange={(image) => edit((d) => void (d.back.image = image))} />
-            <ArtGuide card={deck.card} area="back" />
+            <ArtGuide card={deck.card} area="back" subject="" court={false} colors={back.colors} />
             {back.image && <FitControls fit={back.fit} onChange={(fit) => edit((d) => void (d.back.fit = fit), 'backfit')} />}
           </>
         )}
@@ -330,7 +331,7 @@ function JokerEditor({ index }: { index: number }) {
       <Field label="Picture">
         <ImageDrop value={joker.image} onChange={(v) => set((j) => void (j.image = v))} />
       </Field>
-      <ArtGuide card={cardSize} area="full" />
+      <ArtGuide card={cardSize} area="full" subject="the Joker" court colors={[joker.color]} />
       {joker.image && <FitControls fit={joker.fit} onChange={(fit) => set((j) => void (j.fit = fit), `jf${index}`)} />}
     </Section>
   )
@@ -340,7 +341,8 @@ function JokerEditor({ index }: { index: number }) {
 const IMPORT_MAX_EDGE = 1024
 
 /** Tells the artist what shape and size to generate for a picture slot on the current card size. */
-function ArtGuide({ card, area }: { card: Deck['card']; area: 'full' | 'half' | 'back' }) {
+function ArtGuide({ card, area, subject, court, colors }: { card: Deck['card']; area: ArtArea; subject: string; court: boolean; colors: string[] }) {
+  const notify = useStore((s) => s.notify)
   const box = artBox(card)
   const [w, h] = area === 'back' ? [card.widthMm, card.heightMm] : area === 'half' ? [box.w, box.h / 2] : [box.w, box.h]
   const a = ratioAdvice(w, h)
@@ -361,6 +363,18 @@ function ArtGuide({ card, area }: { card: Deck['card']; area: 'full' | 'half' | 
         For sharp print at 300 dpi you need {a.px.w} × {a.px.h} px.{' '}
         {overCap ? `Uploads are scaled to ${IMPORT_MAX_EDGE} px on the long edge, so print will be a little under 300 dpi.` : 'Larger uploads are fine; they are scaled down on import.'}
       </p>
+      <button
+        type="button"
+        className="btn ghost small"
+        onClick={() =>
+          navigator.clipboard.writeText(artPrompt({ area, subject, court, advice: a, colors })).then(
+            () => notify('Prompt copied. Add your own style before generating.'),
+            () => notify('The clipboard is not available in this browser.', 'error'),
+          )
+        }
+      >
+        Copy prompt
+      </button>
     </div>
   )
 }

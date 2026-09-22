@@ -43,3 +43,35 @@ export function ratioAdvice(w: number, h: number): RatioAdvice {
   const dots = (v: number) => Math.ceil(((v / 25.4) * 300) / 10) * 10
   return { w, h, preset: `${best[0]}:${best[1]}`, cropped, cropAxis, px: { w: dots(w), h: dots(h) } }
 }
+
+export type ArtArea = 'full' | 'half' | 'back'
+
+const COURT_NAMES: Record<string, string> = { A: 'Ace', J: 'Jack', Q: 'Queen', K: 'King' }
+
+/** How a card reads in a prompt, e.g. "the King of Hearts". */
+export function cardSubject(rank: { id: string; label: string }, suitName: string): string {
+  return `the ${COURT_NAMES[rank.id] ?? rank.label} of ${suitName}`
+}
+
+/**
+ * A starting prompt for an image generator: subject, composition for the slot, and the shape to ask for.
+ * The ratio is spelled out in words because generators disagree on flags (Midjourney's --ar, others' size presets).
+ */
+export function artPrompt({ area, subject, court, advice, colors }: { area: ArtArea; subject: string; court: boolean; advice: RatioAdvice; colors: string[] }): string {
+  const shape = `${advice.preset} ${advice.w >= advice.h ? 'landscape' : 'portrait'}`
+  const lines: string[] = []
+  if (area === 'back') {
+    lines.push('Playing card back design: an ornamental pattern that looks the same when the card is turned upside down (180° rotational symmetry).')
+    lines.push('Edge to edge, no focal point near the corners, which are rounded off.')
+  } else if (area === 'half') {
+    lines.push(court ? `Illustration of ${subject} for a playing card, traditional double-ended court card style.` : `Illustration for ${subject}, a double-ended playing card.`)
+    lines.push('Show the figure from the head to the waist only, facing forward, with the head close to the top edge. The bottom edge is where the mirrored copy joins, so let the figure run off it cleanly.')
+  } else {
+    lines.push(court ? `Full-length illustration of ${subject} for a playing card.` : `Illustration for ${subject}, a playing card.`)
+    lines.push('Subject centred and filling the frame, with a little breathing room at every edge.')
+  }
+  if (colors.length) lines.push(`Palette built around ${colors.join(', ')}.`)
+  lines.push('No text, letters, numbers, card corners, borders or frame; the card adds those.')
+  lines.push(`Aspect ratio ${shape}, at least ${advice.px.w} × ${advice.px.h} px.`)
+  return lines.join(' ')
+}
