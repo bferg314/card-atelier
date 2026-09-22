@@ -6,6 +6,7 @@ import { buildOpenDeck, hashableJson, rasterFor, type OpenDeck } from '../model/
 import { googleFontCssUrl, SYSTEM_FONTS } from '../fonts/fonts'
 import { CardSvg } from './CardSvg'
 import { readAsDataUrl } from '../model/images'
+import { sha256 } from '../model/sha256'
 
 export interface SnapshotResult {
   file: OpenDeck
@@ -28,13 +29,8 @@ export async function snapshotDeck(deck: Deck, dpi: number, bleedMm: number, onP
   }
   onProgress(targets.length, targets.length)
   const draft = buildOpenDeck(deck, images, raster)
-  const file = buildOpenDeck(deck, images, raster, { contentHash: await sha256(hashableJson(draft)), createdAt: draft.createdAt })
+  const file = buildOpenDeck(deck, images, raster, { contentHash: sha256(hashableJson(draft)), createdAt: draft.createdAt })
   return { file, missingFonts: missing }
-}
-
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 async function rasterize(markup: string, css: string, width: number, height: number): Promise<string> {

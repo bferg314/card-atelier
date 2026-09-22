@@ -75,7 +75,7 @@ export function TopBar() {
           className="btn primary"
           onClick={() => setMenu('export')}
         >
-          Export JSON
+          Export
         </button>
         <input
           ref={fileRef}
