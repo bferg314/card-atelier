@@ -97,11 +97,11 @@ export const ArtFrame = z.object({
   lines: z.enum(['double', 'single', 'none']).default('double'),
   widthMm: z.number().min(0.05).max(3).default(0.45),
   color: color.nullable().default(null).describe('Frame colour, or null to follow the deck accent.'),
-  tint: z.number().min(0).max(0.4).default(0.05).describe('How strongly the suit colour washes the window behind the art.'),
+  tint: z.number().min(0).max(0.4).default(0).describe('How strongly the suit colour washes the window behind the art.'),
 })
 
 export function defaultArtFrame(): ArtFrame {
-  return { shape: 'rect', marginXMm: 11.5, marginYMm: 11.5, cornerRadiusMm: 0, lines: 'double', widthMm: 0.45, color: null, tint: 0.05 }
+  return { shape: 'rect', marginXMm: 11.5, marginYMm: 11.5, cornerRadiusMm: 0, lines: 'double', widthMm: 0.45, color: null, tint: 0 }
 }
 
 export const CardSpec = z.object({
