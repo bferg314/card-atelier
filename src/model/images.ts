@@ -17,7 +17,7 @@ export async function importImage(file: File, maxEdge = 1024): Promise<string> {
   return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png')
 }
 
-export function readAsDataUrl(file: File): Promise<string> {
+export function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader()
     r.onload = () => resolve(r.result as string)

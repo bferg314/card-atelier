@@ -27,12 +27,16 @@ export const SYSTEM_FONTS = ['Georgia', 'Times New Roman', 'Palatino', 'Helvetic
 
 const loaded = new Set<string>()
 
+export function googleFontCssUrl(family: string): string {
+  return `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, '+')}:wght@400;700&display=swap`
+}
+
 export function loadGoogleFont(family: string): void {
   if (loaded.has(family) || SYSTEM_FONTS.includes(family)) return
   loaded.add(family)
   const link = document.createElement('link')
   link.rel = 'stylesheet'
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, '+')}:wght@400;700&display=swap`
+  link.href = googleFontCssUrl(family)
   document.head.appendChild(link)
 }
 

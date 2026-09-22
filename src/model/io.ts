@@ -1,4 +1,5 @@
 import { Deck, migrate } from './schema'
+import { OPEN_FORMAT } from './open'
 import { resolveCards } from './resolve'
 
 export function serializeDeck(deck: Deck): string {
@@ -15,6 +16,9 @@ export function parseDeck(text: string): Deck {
     raw = JSON.parse(text)
   } catch {
     throw new DeckImportError('That file is not valid JSON.')
+  }
+  if (raw && typeof raw === 'object' && (raw as { format?: unknown }).format === OPEN_FORMAT) {
+    throw new DeckImportError('That is an Open Playing Cards file, a finished export for games. It has no editing details; import the matching .deck.json instead.')
   }
   if (!raw || typeof raw !== 'object' || (raw as { format?: unknown }).format !== 'playing-card-deck') {
     throw new DeckImportError('That file is not a playing card deck (missing "format": "playing-card-deck").')
@@ -41,17 +45,28 @@ export function normalizeDeck(stored: Deck): Deck {
   return deck
 }
 
+function slug(deck: Deck): string {
+  return deck.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'deck'
+}
+
 export function fileNameFor(deck: Deck): string {
-  const slug = deck.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'deck'
-  return `${slug}.deck.json`
+  return `${slug(deck)}.deck.json`
+}
+
+export function openFileNameFor(deck: Deck): string {
+  return `${slug(deck)}.cards.json`
 }
 
 export function downloadDeck(deck: Deck): void {
-  const blob = new Blob([serializeDeck(deck)], { type: 'application/json' })
+  downloadJson(fileNameFor(deck), serializeDeck(deck))
+}
+
+export function downloadJson(name: string, text: string): void {
+  const blob = new Blob([text], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = fileNameFor(deck)
+  a.download = name
   document.body.appendChild(a)
   a.click()
   a.remove()

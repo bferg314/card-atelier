@@ -7,13 +7,17 @@ npm install
 npm run dev     # http://localhost:5173
 npm test        # model tests (schema, round trip, card list)
 npm run build   # type check + production build in dist/
+npm run schema  # regenerate docs/open-playing-cards.schema.json after changing src/model/open.ts
 ```
 
-Decks save automatically to the browser (IndexedDB). **Export JSON** writes a single self-contained `<name>.deck.json`; **Import** reads one back.
+Decks save automatically to the browser (IndexedDB). **Export JSON** offers two formats:
 
-## Deck file format (v1)
+- **Card Atelier file** (`<name>.deck.json`): everything needed to reopen and edit the deck. **Import** reads it back.
+- **Open Playing Cards** (`<name>.cards.json`): a finished PNG of every card and the back, plus suit, rank and value. **Use this one in games.** It does not depend on how Card Atelier draws cards, so it stays stable as the editor changes. The spec is in [docs/open-playing-cards.md](docs/open-playing-cards.md).
 
-Everything a game needs is in one file. Images and uploaded fonts are embedded as `data:` URIs.
+## Card Atelier file format (v1)
+
+The editor's own format. Images and uploaded fonts are embedded as `data:` URIs. It changes as the editor gains features; games should read the Open Playing Cards export instead.
 
 | Field | Meaning |
 | --- | --- |
@@ -26,15 +30,6 @@ Everything a game needs is in one file. Images and uploaded fonts are embedded a
 | `back` | `kind` (`pattern` or `image`), `pattern`, `colors` [ground, ink], `image`, `border`. |
 | `jokers` | `enabled` and `items[]` (`id`, `label`, `color`, `font`, `image`). |
 | `fonts[]` | Where each font comes from: `google`, `system`, or `embedded` with `data`. |
-| `cards[]` | **The flat card list most games want.** One entry per card, in suit then rank order, jokers last when enabled: `{ id, kind, suit, rank, value, label, color }`. |
-
-Minimal consumer:
-
-```js
-const deck = JSON.parse(text)
-if (deck.format !== 'playing-card-deck' || deck.version !== 1) throw new Error('Unsupported deck')
-const drawPile = [...deck.cards]          // 52, or 52 + jokers
-const art = (card) => deck.faces[card.id]?.image ?? null
-```
+| `cards[]` | A flat card list, one entry per card, in suit then rank order, jokers last when enabled: `{ id, kind, suit, rank, value, label, color }`. |
 
 The editor rebuilds `cards` on every export and ignores it on import, so it always matches the rest of the file.

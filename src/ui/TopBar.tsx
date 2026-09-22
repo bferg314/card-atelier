@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../state/store'
-import { downloadDeck, fileNameFor } from '../model/io'
+import { downloadDeck, downloadJson, fileNameFor, openFileNameFor } from '../model/io'
+import { rasterFor } from '../model/open'
+import { Segmented } from './controls'
 import { createDeck, STANDARD_RANKS, THEMES } from '../model/presets'
 import { listCards } from '../model/resolve'
 import { CardSvg } from '../render/CardSvg'
@@ -11,9 +13,9 @@ export function TopBar() {
   const deck = useStore((s) => s.deck)
   const canUndo = useStore((s) => s.past.length > 0)
   const canRedo = useStore((s) => s.future.length > 0)
-  const { undo, redo, update, importDeckText, notify } = useStore.getState()
+  const { undo, redo, update, importDeckText } = useStore.getState()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [menu, setMenu] = useState<'library' | 'new' | null>(null)
+  const [menu, setMenu] = useState<'library' | 'new' | 'export' | null>(null)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -69,10 +71,7 @@ export function TopBar() {
         <button
           type="button"
           className="btn primary"
-          onClick={() => {
-            downloadDeck(deck)
-            notify(`Saved ${fileNameFor(deck)}`)
-          }}
+          onClick={() => setMenu('export')}
         >
           Export JSON
         </button>
@@ -92,6 +91,7 @@ export function TopBar() {
 
       {menu === 'new' && <NewDeckDialog onClose={() => setMenu(null)} />}
       {menu === 'library' && <LibraryDialog onClose={() => setMenu(null)} />}
+      {menu === 'export' && <ExportDialog onClose={() => setMenu(null)} />}
     </header>
   )
 }
@@ -211,6 +211,79 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
           }}
         >
           Duplicate current deck
+        </button>
+      </div>
+    </Dialog>
+  )
+}
+
+const RESOLUTIONS = [
+  { value: '150', label: 'Screen' },
+  { value: '300', label: 'Print' },
+]
+
+function ExportDialog({ onClose }: { onClose: () => void }) {
+  const deck = useStore((s) => s.deck)
+  const notify = useStore((s) => s.notify)
+  const [dpi, setDpi] = useState('150')
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
+  const raster = rasterFor(deck.card, Number(dpi))
+  const busy = progress !== null
+
+  async function exportOpen() {
+    setWarning(null)
+    setProgress({ done: 0, total: listCards(deck).length + 1 })
+    try {
+      // Loaded on demand: the renderer pulls in react-dom/server, which the editor does not otherwise need.
+      const { snapshotDeck } = await import('../render/snapshot')
+      const { file, missingFonts } = await snapshotDeck(deck, Number(dpi), (done, total) => setProgress({ done, total }))
+      const text = JSON.stringify(file)
+      downloadJson(openFileNameFor(deck), text)
+      notify(`Saved ${openFileNameFor(deck)} (${(text.length / 1_048_576).toFixed(1)} MB)`)
+      if (missingFonts.length) setWarning(`Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`)
+      else onClose()
+    } catch (e) {
+      notify(`Export failed: ${(e as Error).message}`, 'error')
+    } finally {
+      setProgress(null)
+    }
+  }
+
+  return (
+    <Dialog title="Export" onClose={busy ? () => {} : onClose}>
+      <div className="export-option">
+        <div>
+          <h3>Card Atelier file</h3>
+          <p className="dialog-note">Everything needed to reopen and edit this deck: layout, lettering, fonts and pictures. Import it back here any time.</p>
+        </div>
+        <button
+          type="button"
+          className="btn ghost"
+          disabled={busy}
+          onClick={() => {
+            downloadDeck(deck)
+            notify(`Saved ${fileNameFor(deck)}`)
+            onClose()
+          }}
+        >
+          Download .deck.json
+        </button>
+      </div>
+      <div className="export-option">
+        <div>
+          <h3>Open Playing Cards</h3>
+          <p className="dialog-note">
+            Finished card images for games and other programs, with each card's suit, rank and value. It does not depend on Card Atelier, so it keeps working whatever changes here. See <code>docs/open-playing-cards.md</code>.
+          </p>
+          <Segmented value={dpi} options={RESOLUTIONS} onChange={setDpi} />
+          <p className="field-hint">
+            {raster.width} × {raster.height} px per card at {dpi} dpi. {dpi === '300' ? 'Sharp in print; a larger file.' : 'Fine on screen; a smaller file.'}
+          </p>
+          {warning && <p className="field-hint warn">{warning}</p>}
+        </div>
+        <button type="button" className="btn primary" disabled={busy} onClick={exportOpen}>
+          {progress ? `Rendering ${progress.done} of ${progress.total}` : 'Download .cards.json'}
         </button>
       </div>
     </Dialog>
