@@ -7,30 +7,71 @@ import { googleFontCssUrl, SYSTEM_FONTS } from '../fonts/fonts'
 import { CardSvg } from './CardSvg'
 import { readAsDataUrl } from '../model/images'
 import { sha256 } from '../model/sha256'
+import { loadFonts, outlineSvg } from './outline'
 
 export interface SnapshotResult {
   file: OpenDeck
-  /** Families that could not be embedded, so the images fell back to another typeface. */
+  /** Families that could not be embedded or outlined, so those cards fell back to another typeface. */
   missingFonts: string[]
 }
 
-/** Render every card and the back to PNG and assemble an Open Playing Cards file. */
-export async function snapshotDeck(deck: Deck, dpi: number, bleedMm: number, onProgress: (done: number, total: number) => void): Promise<SnapshotResult> {
+export interface SnapshotOptions {
+  dpi: number
+  bleedMm: number
+  /** Which pictures to produce: rendered PNGs, vector SVGs with the text outlined, or both. */
+  images: 'png' | 'svg' | 'both'
+}
+
+/** Render every card and the back, and assemble an Open Playing Cards file. */
+export async function snapshotDeck(deck: Deck, options: SnapshotOptions, onProgress: (done: number, total: number) => void): Promise<SnapshotResult> {
+  const { dpi, bleedMm, images: want } = options
   const raster = rasterFor(deck.card, dpi, bleedMm)
+  const wantPng = want !== 'svg'
+  const wantSvg = want !== 'png'
   const { css, missing } = await fontFaces(deck)
+  const warnings = new Set(wantPng ? missing : [])
+  const { fonts, missing: unoutlined } = wantSvg ? await loadFonts(deck) : { fonts: new Map(), missing: [] }
   const targets = [...listCards(deck), 'back' as const]
-  const images: Record<string, string> = {}
+  const pngs: Record<string, string> = {}
+  const vectors: Record<string, string> = {}
+
   for (const [i, card] of targets.entries()) {
     onProgress(i, targets.length)
+    const id = card === 'back' ? 'back' : card.id
     const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} bleedMm={bleedMm} />)
-    images[card === 'back' ? 'back' : card.id] = await rasterize(markup, css, raster.width, raster.height)
+    if (wantPng) pngs[id] = await rasterize(markup, css, raster.width, raster.height)
+    if (wantSvg) {
+      const { svg, missing: unread } = outlineSvg(vectorRoot(markup, deck, bleedMm), fonts)
+      unread.forEach((f) => warnings.add(f))
+      // Text that could not be outlined still needs its font, so those cards carry it.
+      vectors[id] = svgDataUri(unread.length ? withFonts(svg, css) : svg)
+    }
     // Give the browser a frame so the progress text repaints.
     await new Promise((r) => setTimeout(r))
   }
   onProgress(targets.length, targets.length)
-  const draft = buildOpenDeck(deck, images, raster)
-  const file = buildOpenDeck(deck, images, raster, { contentHash: sha256(hashableJson(draft)), createdAt: draft.createdAt })
-  return { file, missingFonts: missing }
+  if (wantSvg) unoutlined.forEach((f) => warnings.add(f))
+
+  const draft = buildOpenDeck(deck, { images: pngs, vectors }, raster)
+  const file = buildOpenDeck(deck, { images: pngs, vectors }, raster, { contentHash: sha256(hashableJson(draft)), createdAt: draft.createdAt })
+  return { file, missingFonts: [...warnings] }
+}
+
+/** The vector card: real millimetre size for print tools, viewBox for anything that scales it. */
+function vectorRoot(markup: string, deck: Deck, bleedMm: number): string {
+  const w = deck.card.widthMm + 2 * bleedMm
+  const h = deck.card.heightMm + 2 * bleedMm
+  return markup.replace(/^<svg /, `<svg width="${round(w)}mm" height="${round(h)}mm" `)
+}
+
+const round = (v: number) => Number(v.toFixed(2))
+
+function withFonts(svg: string, css: string): string {
+  return svg.replace(/^(<svg[^>]*>)/, `$1<style>${css}</style>`)
+}
+
+function svgDataUri(svg: string): string {
+  return 'data:image/svg+xml;base64,' + btoa(String.fromCharCode(...new TextEncoder().encode(svg)))
 }
 
 /**

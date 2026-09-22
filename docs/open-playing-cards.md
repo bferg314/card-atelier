@@ -2,7 +2,7 @@
 
 A deck of playing cards as data a game can use directly: one PNG image per card, the card back, and the facts needed to play with them (suit, rank, numeric value). It says nothing about how the cards were designed, so games that read it keep working whatever happens to the tool that wrote it.
 
-Card Atelier writes these files from **Export → Open Playing Cards**, either as a single `<deck-name>.cards.json` with the images embedded, or as a `.zip` holding the same document plus the PNGs as files. Any other tool is welcome to write them too.
+Card Atelier writes these files from **Export → Open Playing Cards**, either as a single `<deck-name>.cards.json` with the pictures embedded, or as a `.zip` holding the same document plus the pictures as files. Each card can carry a rendered PNG, a vector SVG, or both. Any other tool is welcome to write them too.
 
 The machine-readable definition is [`open-playing-cards.schema.json`](open-playing-cards.schema.json) (JSON Schema 2020-12). It is generated from [`src/model/open.ts`](../src/model/open.ts), so the two always agree.
 
@@ -54,6 +54,7 @@ The machine-readable definition is [`open-playing-cards.schema.json`](open-playi
 | `suits[]` | `id`, `name`, `symbol`, `color` and `order` for each suit. |
 | `ranks[]` | `id`, `label`, `value` for each rank, in ascending order. |
 | `back.image` | The card back. |
+| `back.vector` | Optional. The card back as vector art. |
 | `cards[]` | Every card, in play order: suit by suit, ranks ascending, jokers last. |
 | `cards[].id` | Stable id. Standard cards are `<suit id>-<rank id>`, e.g. `hearts-K`. |
 | `cards[].kind` | `"standard"` or `"joker"`. |
@@ -62,11 +63,14 @@ The machine-readable definition is [`open-playing-cards.schema.json`](open-playi
 | `cards[].value` | Default ordinal for the rank; `null` for jokers. See the note below. |
 | `cards[].label`, `cards[].name` | Short and long display names, e.g. `K♥` and `King of Hearts`. Repeated names, such as two jokers, are numbered. |
 | `cards[].color` | The card's main ink colour. |
-| `cards[].image` | The card face. |
+| `cards[].image` | The card face as a PNG. Optional: a deck may ship vector cards only. |
+| `cards[].vector` | Optional. The same face as an SVG, sharp at any size. |
 
 Colours are lower-case `#rrggbb`, or `#rrggbbaa` when they carry transparency.
 
-Images are PNG. In a single-file deck each `image` is a `data:image/png;base64,…` URI; in a zipped deck it is a path relative to the JSON, such as `cards/hearts-K.png`. Every image is exactly `card.imageWidth × card.imageHeight`. Without bleed, the area outside the rounded corners is transparent; with bleed, images are square and fully opaque.
+Pictures come in two forms, and a card carries at least one of them. `image` is a PNG, `vector` is an SVG. In a single-file deck each is a `data:` URI; in a zipped deck each is a path relative to the JSON, such as `cards/hearts-K.png` or `cards/hearts-K.svg`.
+
+Every PNG is exactly `card.imageWidth × card.imageHeight`. Without bleed, the area outside the rounded corners is transparent; with bleed, PNGs are square and fully opaque.
 
 ### The standard French pack
 
@@ -82,6 +86,14 @@ A game that needs a French deck should check `deckType` and refuse the file clea
 
 `value` numbers the ranks in their conventional order, Ace low at 1 through King at 13. It is a convenience for sorting, not a statement about any game. A game where Aces are high, or where a Queen outranks a King, maps from `rank` id to its own values and ignores `value`.
 
+### Vector cards
+
+A `vector` is a complete SVG of the card. Its text is already outlined, so it needs no fonts and draws the same in a browser, in Inkscape and at a print shop. It carries `width` and `height` in millimetres alongside a `viewBox`, so it opens at true size in a design tool and scales to any box on screen. With bleed, the `viewBox` starts at negative coordinates and the millimetre size includes the bleed.
+
+Artwork the designer uploaded stays as it was: a photograph or a painted court card is still a raster picture embedded in the SVG, while uploaded SVG art stays vector. Tracing a photograph into paths would make the file larger and the picture worse.
+
+Prefer `vector` when a card is drawn small or at unpredictable sizes, and fall back to `image` when it is absent. One caution: vector makes a small card **sharp**, not **legible**. A corner index is about 6% of the card's height, so on a 30 px card it is 2 px tall whether it came from an SVG or a PNG. A deck meant to be played small should be designed with oversized indices; Card Atelier has a preset for it under Artwork → Lettering.
+
 ### What a licence covers
 
 `license` states what the deck's author allows for the deck as published. It cannot grant rights the author never held: artwork, photographs or generated images brought into a deck keep whatever terms they came with, and a permissive `license` does not override them. A reader relying on a deck for anything that matters should know where it came from, which is what `source` is for.
@@ -94,7 +106,8 @@ Fonts are a narrower question, and they do not arise here. These files hold rend
 2. Ignore fields you do not recognise. Later additions add fields rather than change existing ones, so older readers keep working.
 3. Do not assume 52 cards, four suits or thirteen ranks unless `deckType` says so. Read `cards[]`; use `suits[]` and `ranks[]` for ordering and grouping.
 4. Treat `id` as the key for a card. Labels and names are for display.
-5. Accept both packagings: `image` may be a `data:` URI or a relative path.
+5. Accept both packagings: a picture may be a `data:` URI or a relative path.
+6. Take whichever picture you can use: `vector` when you want it and it is there, `image` otherwise. A card always has at least one.
 
 ## Using the images
 
@@ -141,5 +154,8 @@ Version 1 gained these optional fields after the first game integration. Readers
 
 - `$schema`, `deckId`, `contentHash`, `deckType`, `license`, `source`
 - `cards[].order`, `suits[].order`, `card.bleedMm`
+- `cards[].vector` and `back.vector`, for vector cards
 - `image` may now be a relative path, for zipped decks
 - `author` and `description` are omitted when empty rather than written as `""`
+
+One change is not merely additive: `image` is now optional, because a deck may ship vector cards only. Such a file needs a reader that understands `vector`; a deck exported with both pictures, which is the default, stays readable by anything written against the original v1.

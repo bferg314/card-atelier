@@ -170,10 +170,24 @@
           "type": "string",
           "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$",
           "description": "PNG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder."
+        },
+        "vector": {
+          "type": "string",
+          "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.svg)$",
+          "description": "SVG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder."
         }
       },
-      "required": [
-        "image"
+      "anyOf": [
+        {
+          "required": [
+            "image"
+          ]
+        },
+        {
+          "required": [
+            "vector"
+          ]
+        }
       ]
     },
     "cards": {
@@ -233,9 +247,14 @@
             "description": "Main ink colour of the card."
           },
           "image": {
+            "description": "The card face at card.imageWidth × card.imageHeight, with transparent rounded corners.",
             "type": "string",
-            "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$",
-            "description": "The card face at card.imageWidth × card.imageHeight, with transparent rounded corners."
+            "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$"
+          },
+          "vector": {
+            "description": "The same face as vector art, text outlined, sharp at any size. Prefer it when drawing small.",
+            "type": "string",
+            "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.svg)$"
           }
         },
         "required": [
@@ -247,8 +266,19 @@
           "value",
           "label",
           "name",
-          "color",
-          "image"
+          "color"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "image"
+            ]
+          },
+          {
+            "required": [
+              "vector"
+            ]
+          }
         ]
       },
       "description": "Every card in play order: suit by suit, ranks ascending, jokers last."

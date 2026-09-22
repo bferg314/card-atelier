@@ -7,6 +7,7 @@ import { DeckImportError, parseDeck } from './io'
 import { buildOpenDeck, frenchDeckType, hashableJson, openJsonSchema, OpenDeck, rasterFor, toFolder } from './open'
 
 const PNG = 'data:image/png;base64,iVBORw0KGgo='
+const SVG = 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
 const SCHEMA_PATH = new URL('../../docs/open-playing-cards.schema.json', import.meta.url)
 
 function stubImages(deck: ReturnType<typeof createDeck>) {
@@ -17,7 +18,7 @@ describe('open playing cards', () => {
   it('builds a valid file with readable names', () => {
     const deck = createDeck()
     deck.jokers.enabled = true
-    const file = OpenDeck.parse(buildOpenDeck(deck, stubImages(deck), rasterFor(deck.card, 300)))
+    const file = OpenDeck.parse(buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 300)))
     expect(file.cards).toHaveLength(54)
     expect(file.card).toMatchObject({ imageWidth: 750, imageHeight: 1050, dpi: 300 })
     expect(file.cards.find((c) => c.id === 'hearts-K')).toMatchObject({ name: 'King of Hearts', value: 13, suit: 'hearts', label: 'K♥' })
@@ -29,12 +30,12 @@ describe('open playing cards', () => {
     const deck = createDeck()
     const images = stubImages(deck)
     delete images['hearts-7']
-    expect(() => buildOpenDeck(deck, images, rasterFor(deck.card, 150))).toThrow(/hearts-7/)
+    expect(() => buildOpenDeck(deck, { images }, rasterFor(deck.card, 150))).toThrow(/hearts-7/)
   })
 
   it('is rejected by the editor import with a pointer to the .deck.json', () => {
     const deck = createDeck()
-    const text = JSON.stringify(buildOpenDeck(deck, stubImages(deck), rasterFor(deck.card, 150)))
+    const text = JSON.stringify(buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 150)))
     expect(() => parseDeck(text)).toThrow(DeckImportError)
     expect(() => parseDeck(text)).toThrow(/\.deck\.json/)
   })
@@ -47,7 +48,7 @@ describe('open playing cards', () => {
 })
 
 describe('open format, fields for readers', () => {
-  const build = (deck: ReturnType<typeof createDeck>) => buildOpenDeck(deck, stubImages(deck), rasterFor(deck.card, 150))
+  const build = (deck: ReturnType<typeof createDeck>) => buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 150))
 
   it('marks a standard pack and stops marking an altered one', () => {
     const deck = createDeck()
@@ -79,7 +80,7 @@ describe('open format, fields for readers', () => {
   it('hashes the deck, not the moment it was exported', () => {
     const deck = createDeck()
     const a = build(deck)
-    const b = buildOpenDeck(deck, stubImages(deck), rasterFor(deck.card, 150), { createdAt: '2020-01-01T00:00:00.000Z' })
+    const b = buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 150), { createdAt: '2020-01-01T00:00:00.000Z' })
     expect(hashableJson(a)).toBe(hashableJson(b))
     deck.suits[0].color = '#123456'
     expect(hashableJson(build(deck))).not.toBe(hashableJson(a))
@@ -98,7 +99,7 @@ describe('open format, fields for readers', () => {
 describe('folder packaging', () => {
   it('moves images out to files and still validates', () => {
     const deck = createDeck()
-    const file = buildOpenDeck(deck, stubImages(deck), rasterFor(deck.card, 150))
+    const file = buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 150))
     const entries = toFolder(file)
     expect(entries[0].name).toBe('deck.json')
     expect(entries.map((e) => e.name)).toContain('cards/hearts-K.png')
@@ -108,5 +109,42 @@ describe('folder packaging', () => {
     const packaged = OpenDeck.parse(JSON.parse(new TextDecoder().decode(entries[0].data)))
     expect(packaged.back.image).toBe('back.png')
     expect(packaged.cards.find((c) => c.id === 'hearts-K')?.image).toBe('cards/hearts-K.png')
+  })
+})
+
+describe('vector cards', () => {
+  const vectors = (deck: ReturnType<typeof createDeck>) =>
+    Object.fromEntries([...listCards(deck).map((c) => [c.id, SVG]), ['back', SVG]])
+
+  it('carries a vector beside the image, or on its own', () => {
+    const deck = createDeck()
+    const both = OpenDeck.parse(buildOpenDeck(deck, { images: stubImages(deck), vectors: vectors(deck) }, rasterFor(deck.card, 150)))
+    expect(both.cards[0]).toMatchObject({ image: PNG, vector: SVG })
+    expect(both.back).toEqual({ image: PNG, vector: SVG })
+
+    const svgOnly = OpenDeck.parse(buildOpenDeck(deck, { images: {}, vectors: vectors(deck) }, rasterFor(deck.card, 150)))
+    expect(svgOnly.cards[0].image).toBeUndefined()
+    expect(svgOnly.cards[0].vector).toBe(SVG)
+  })
+
+  it('refuses a card with no picture at all', () => {
+    const deck = createDeck()
+    expect(() => buildOpenDeck(deck, { images: {} }, rasterFor(deck.card, 150))).toThrow(/No picture/)
+  })
+
+  it('packs both file types into the folder form', () => {
+    const deck = createDeck()
+    const file = buildOpenDeck(deck, { images: stubImages(deck), vectors: vectors(deck) }, rasterFor(deck.card, 150))
+    const names = toFolder(file).map((e) => e.name)
+    expect(names).toContain('cards/hearts-K.png')
+    expect(names).toContain('cards/hearts-K.svg')
+    expect(names).toContain('back.svg')
+    const packaged = OpenDeck.parse(JSON.parse(new TextDecoder().decode(toFolder(file)[0].data)))
+    expect(packaged.cards.find((c) => c.id === 'hearts-K')?.vector).toBe('cards/hearts-K.svg')
+  })
+
+  it('says in the schema that a card needs one picture or the other', () => {
+    const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'))
+    expect(schema.properties.cards.items.anyOf).toEqual([{ required: ['image'] }, { required: ['vector'] }])
   })
 })

@@ -222,6 +222,12 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
 /** Standard print bleed; enough for any print-on-demand service I know of. */
 const BLEED_MM = 2
 
+const PICTURES = [
+  { value: 'both' as const, label: 'Both' },
+  { value: 'png' as const, label: 'PNG' },
+  { value: 'svg' as const, label: 'SVG' },
+]
+
 const RESOLUTIONS = [
   { value: '150', label: 'Screen' },
   { value: '300', label: 'Print' },
@@ -231,6 +237,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const deck = useStore((s) => s.deck)
   const notify = useStore((s) => s.notify)
   const [dpi, setDpi] = useState('150')
+  const [images, setImages] = useState<'png' | 'svg' | 'both'>('both')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [bleed, setBleed] = useState(false)
@@ -244,7 +251,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     try {
       // Loaded on demand: the renderer pulls in react-dom/server, which the editor does not otherwise need.
       const { snapshotDeck } = await import('../render/snapshot')
-      const { file, missingFonts } = await snapshotDeck(deck, Number(dpi), bleedMm, (done, total) => setProgress({ done, total }))
+      const { file, missingFonts } = await snapshotDeck(deck, { dpi: Number(dpi), bleedMm, images }, (done, total) => setProgress({ done, total }))
       const name = as === 'json' ? openFileNameFor(deck) : openFolderNameFor(deck)
       const size =
         as === 'json'
@@ -259,7 +266,11 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
               return bytes.length
             })()
       notify(`Saved ${name} (${(size / 1_048_576).toFixed(1)} MB)`)
-      if (missingFonts.length) setWarning(`Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`)
+      if (missingFonts.length) setWarning(
+          images === 'png'
+            ? `Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`
+            : `Could not read ${missingFonts.join(', ')}, so its lettering stays as live text in the vector cards instead of outlines, and needs the font to render. System fonts cannot be outlined; otherwise check your connection and export again.`,
+        )
       else onClose()
     } catch (e) {
       notify(`Export failed: ${(e as Error).message}`, 'error')
@@ -294,11 +305,23 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
           <p className="dialog-note">
             Finished card images for games and other programs, with each card's suit, rank and value. It does not depend on Card Atelier, so it keeps working whatever changes here. See <code>docs/open-playing-cards.md</code>.
           </p>
-          <Segmented value={dpi} options={RESOLUTIONS} onChange={setDpi} />
-          <Toggle checked={bleed} onChange={setBleed} label={`Add ${BLEED_MM} mm print bleed (square, opaque edges)`} />
+          <Segmented value={images} options={PICTURES} onChange={setImages} />
           <p className="field-hint">
-            {raster.width} × {raster.height} px per card at {dpi} dpi. {dpi === '300' ? 'Sharp in print; a larger file.' : 'Fine on screen; a smaller file.'}
+            {images === 'svg'
+              ? 'Vector cards with the lettering outlined: sharp at any size, no fonts needed. Uploaded pictures stay as they are.'
+              : images === 'both'
+                ? 'Both, so a game can draw the vector small and keep the PNG for everything else.'
+                : 'Rendered pictures, ready for any engine.'}
           </p>
+          {images !== 'svg' && (
+            <>
+              <Segmented value={dpi} options={RESOLUTIONS} onChange={setDpi} />
+              <p className="field-hint">
+                {raster.width} × {raster.height} px per card at {dpi} dpi. {dpi === '300' ? 'Sharp in print; a larger file.' : 'Fine on screen; a smaller file.'}
+              </p>
+            </>
+          )}
+          <Toggle checked={bleed} onChange={setBleed} label={`Add ${BLEED_MM} mm print bleed (square, opaque edges)`} />
           {warning && <p className="field-hint warn">{warning}</p>}
         </div>
         <div className="button-row">

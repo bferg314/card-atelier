@@ -16,7 +16,7 @@ npm run deploy  # build and publish to Cloudflare Workers
 Decks save automatically to the browser (IndexedDB). **Export** offers two formats:
 
 - **Card Atelier file** (`<name>.deck.json`): everything needed to reopen and edit the deck. **Import** reads it back.
-- **Open Playing Cards**: a finished PNG of every card and the back, plus suit, rank and value. **Use this one in games.** It does not depend on how Card Atelier draws cards, so it stays stable as the editor changes. Export it as one file (`<name>.cards.json`, images embedded) or as a zip of PNGs with a `deck.json` beside them, which is easier for game engines, at screen or print resolution, with optional 2 mm print bleed. The spec is in [docs/open-playing-cards.md](docs/open-playing-cards.md).
+- **Open Playing Cards**: a finished PNG of every card and the back, plus suit, rank and value. **Use this one in games.** It does not depend on how Card Atelier draws cards, so it stays stable as the editor changes. Export it as one file (`<name>.cards.json`, pictures embedded) or as a zip with a `deck.json` beside them, which is easier for game engines. Cards can be rendered PNGs at screen or print resolution, vector SVGs with the lettering outlined (sharp at any size, no fonts needed, and about a fifth of the size), or both, with optional 2 mm print bleed. The spec is in [docs/open-playing-cards.md](docs/open-playing-cards.md).
 
 ## Card Atelier file format (v1)
 

@@ -23,6 +23,11 @@ const imageRef = z
   .string()
   .regex(/^(data:image\/png;base64,[A-Za-z0-9+/=]+|[\w./-]+\.png)$/)
   .describe('PNG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder.')
+/** The same picture as vector art, with every letter already outlined so no font is needed. */
+const vectorRef = z
+  .string()
+  .regex(/^(data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+|[\w./-]+\.svg)$/)
+  .describe('SVG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder.')
 const hex = z
   .string()
   .regex(/^#([0-9a-f]{6}|[0-9a-f]{8})$/)
@@ -38,7 +43,8 @@ export const OpenCard = z.object({
   label: z.string().describe('Short label, e.g. "K♥".'),
   name: z.string().describe('Readable name, e.g. "King of Hearts".'),
   color: hex.describe('Main ink colour of the card.'),
-  image: imageRef.describe('The card face at card.imageWidth × card.imageHeight, with transparent rounded corners.'),
+  image: imageRef.optional().describe('The card face at card.imageWidth × card.imageHeight, with transparent rounded corners.'),
+  vector: vectorRef.optional().describe('The same face as vector art, text outlined, sharp at any size. Prefer it when drawing small.'),
 })
 
 export const OpenDeck = z.object({
@@ -66,7 +72,7 @@ export const OpenDeck = z.object({
   }),
   suits: z.array(z.object({ id: z.string(), name: z.string(), symbol: z.string(), color: hex, order: z.int().min(0) })),
   ranks: z.array(z.object({ id: z.string(), label: z.string(), value: z.number() })),
-  back: z.object({ image: imageRef }),
+  back: z.object({ image: imageRef.optional(), vector: vectorRef.optional() }),
   cards: z.array(OpenCard).describe('Every card in play order: suit by suit, ranks ascending, jokers last.'),
 })
 
@@ -100,19 +106,27 @@ export interface BuildOptions {
   createdAt?: string
 }
 
-/** Assemble the file from rendered images keyed by card id, plus "back". */
-export function buildOpenDeck(deck: Deck, images: Record<string, string>, raster: Raster, options: BuildOptions = {}): OpenDeck {
+export interface Pictures {
+  /** Rendered PNGs by card id, plus "back". */
+  images: Record<string, string>
+  /** Vector cards by card id, plus "back". */
+  vectors?: Record<string, string>
+}
+
+/** Assemble the file from the pictures rendered for each card id, plus "back". */
+export function buildOpenDeck(deck: Deck, pictures: Pictures, raster: Raster, options: BuildOptions = {}): OpenDeck {
   const refs = listCards(deck)
-  const image = (id: string) => {
-    const uri = images[id]
-    if (!uri) throw new Error(`No image rendered for ${id}.`)
-    return uri
+  const { images, vectors = {} } = pictures
+  const picture = (id: string) => {
+    const of = { ...(images[id] ? { image: images[id] } : {}), ...(vectors[id] ? { vector: vectors[id] } : {}) }
+    if (!of.image && !of.vector) throw new Error(`No picture rendered for ${id}.`)
+    return of
   }
   const jokerNames = numberDuplicates(refs.map((r) => (r.kind === 'joker' ? titleCase(r.joker.label) : '')))
   const cards = resolveCards(deck).map((c, i) => {
     const ref = refs[i]
     const name = ref.kind === 'standard' ? cardSubject(ref.rank, ref.suit.name).replace(/^the /, '') : jokerNames[i]
-    return { ...c, order: i, color: normalizeHex(c.color), name, image: image(c.id) }
+    return { ...c, order: i, color: normalizeHex(c.color), name, ...picture(c.id) }
   })
   const file: OpenDeck = {
     $schema: OPEN_SCHEMA_URL,
@@ -139,7 +153,7 @@ export function buildOpenDeck(deck: Deck, images: Record<string, string>, raster
     },
     suits: deck.suits.map(({ id, name, symbol, color }, order) => ({ id, name, symbol, color: normalizeHex(color), order })),
     ranks: deck.ranks.map(({ id, label, value }) => ({ id, label, value })),
-    back: { image: image('back') },
+    back: picture('back'),
     cards,
   }
   return file
@@ -182,8 +196,10 @@ export function openJsonSchema(): unknown {
   return z.toJSONSchema(OpenDeck, {
     io: 'input',
     override: (ctx) => {
-      const s = ctx.jsonSchema as { type?: string; const?: unknown }
+      const s = ctx.jsonSchema as { type?: string; const?: unknown; properties?: Record<string, unknown>; anyOf?: unknown[] }
       if (s.const === OPEN_VERSION && s.type === 'number') s.type = 'integer'
+      // Both pictures are optional on their own, but a card has to carry one of them.
+      if (s.properties?.image && s.properties?.vector) s.anyOf = [{ required: ['image'] }, { required: ['vector'] }]
     },
   })
 }
@@ -194,14 +210,19 @@ export function openJsonSchema(): unknown {
  */
 export function toFolder(file: OpenDeck): ZipEntry[] {
   const entries: ZipEntry[] = []
-  const move = (uri: string, path: string) => {
+  const move = (uri: string | undefined, path: string) => {
+    if (!uri) return undefined
     entries.push({ name: path, data: dataUriBytes(uri) })
     return path
   }
+  const out = (id: string, picture: { image?: string; vector?: string }) => ({
+    ...(picture.image ? { image: move(picture.image, `${id}.png`) } : {}),
+    ...(picture.vector ? { vector: move(picture.vector, `${id}.svg`) } : {}),
+  })
   const folder: OpenDeck = {
     ...file,
-    back: { image: move(file.back.image, 'back.png') },
-    cards: file.cards.map((c) => ({ ...c, image: move(c.image, `cards/${c.id}.png`) })),
+    back: out('back', file.back),
+    cards: file.cards.map((c) => ({ ...c, ...out(`cards/${c.id}`, c) })),
   }
   return [{ name: 'deck.json', data: new TextEncoder().encode(JSON.stringify(folder, null, 2)) }, ...entries]
 }
