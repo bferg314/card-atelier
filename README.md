@@ -2,6 +2,8 @@
 
 A browser app for designing playing card decks and exporting them as portable JSON.
 
+![The Artwork panel, with a King of Hearts on the stage and the deck laid out below](docs/screenshot.jpg)
+
 ```sh
 npm install
 npm run dev     # http://localhost:5173
@@ -34,3 +36,7 @@ The editor's own format. Images and uploaded fonts are embedded as `data:` URIs.
 | `cards[]` | A flat card list, one entry per card, in suit then rank order, jokers last when enabled: `{ id, kind, suit, rank, value, label, color }`. |
 
 The editor rebuilds `cards` on every export and ignores it on import, so it always matches the rest of the file.
+
+## License
+
+[MIT](LICENSE). The Open Playing Cards format in [docs/](docs/open-playing-cards.md) is free for anyone to read or write, in any program.

@@ -31,7 +31,7 @@ export function DeckPanel() {
           <TextField value={deck.author} placeholder="Your name" maxLength={80} onChange={(v) => update((d) => void (d.author = v), 'author')} />
         </Field>
         <Field label="Notes">
-          <textarea className="input" rows={2} value={deck.description} placeholder="What games is this deck for?" onChange={(e) => update((d) => void (d.description = e.target.value), 'desc')} />
+          <textarea className="input" rows={2} aria-label="Notes" value={deck.description} placeholder="What games is this deck for?" onChange={(e) => update((d) => void (d.description = e.target.value), 'desc')} />
         </Field>
       </Section>
 

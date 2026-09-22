@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useId, useRef, useState, type ReactNode } from 'react'
 import { GOOGLE_FONTS, SYSTEM_FONTS, loadGoogleFont, fontStack, loadEmbeddedFont } from '../fonts/fonts'
 import { importImage, readAsDataUrl } from '../model/images'
 import type { FontRef, ImageFit } from '../model/schema'
@@ -16,22 +16,39 @@ export function Section({ title, children, aside }: { title: string; children: R
   )
 }
 
+/**
+ * A field wraps a control that is often a group of buttons rather than one input, so the label is tied to the
+ * control with aria-labelledby instead of a <label> wrapper, which would otherwise read every button's text out
+ * as the name of each one.
+ */
+const FieldLabel = createContext<string | undefined>(undefined)
+
+/** Props that name a control after the field it sits in. */
+export function useFieldLabel(): { 'aria-labelledby'?: string } {
+  const id = useContext(FieldLabel)
+  return id ? { 'aria-labelledby': id } : {}
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  const id = useId()
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      {children}
+    <div className="field">
+      <span className="field-label" id={id}>
+        {label}
+      </span>
+      <FieldLabel.Provider value={id}>{children}</FieldLabel.Provider>
       {hint && <span className="field-hint">{hint}</span>}
-    </label>
+    </div>
   )
 }
 
 export function TextField({ value, onChange, placeholder, maxLength }: { value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number }) {
-  return <input className="input" type="text" value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} />
+  return <input className="input" type="text" value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} {...useFieldLabel()} />
 }
 
 export function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const named = useFieldLabel()
   return (
     <span className="color-field">
       <span className="swatch" style={{ background: value }}>
@@ -46,6 +63,7 @@ export function ColorField({ value, onChange }: { value: string; onChange: (v: s
         }}
         onBlur={() => setDraft(null)}
         spellCheck={false}
+        {...named}
       />
     </span>
   )
@@ -58,7 +76,7 @@ function expand(hex: string) {
 export function Slider({ value, min, max, step, onChange, format }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void; format?: (v: number) => string }) {
   return (
     <span className="slider">
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} {...useFieldLabel()} />
       <output>{format ? format(value) : value}</output>
     </span>
   )
@@ -78,7 +96,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void }) {
   return (
-    <div className="segmented" role="radiogroup">
+    <div className="segmented" role="radiogroup" {...useFieldLabel()}>
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
           {o.label}
@@ -122,6 +140,7 @@ export function FontPicker({ value, onChange }: { value: FontRef; onChange: (v: 
     <div className="font-picker">
       <select
         className="input"
+        {...useFieldLabel()}
         value={value.family}
         style={{ fontFamily: fontStack(value.family) }}
         onChange={(e) => {
