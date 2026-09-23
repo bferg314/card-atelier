@@ -1,6 +1,7 @@
 import { Deck, migrate } from './schema'
 import { OPEN_FORMAT } from './open'
 import { resolveCards } from './resolve'
+import { createDeck } from './presets'
 
 export function serializeDeck(deck: Deck): string {
   const out: Deck = { ...deck, updatedAt: new Date().toISOString(), cards: resolveCards(deck) }
@@ -37,12 +38,40 @@ export function parseDeck(text: string): Deck {
   return deck
 }
 
-/** Fill defaults on a deck read back from browser storage. Stored decks skip import validation, so fields added since they were saved would otherwise be missing. */
+/**
+ * Fill defaults on a deck read back from browser storage. Stored decks skip import validation, so fields added
+ * since they were saved would otherwise be missing.
+ *
+ * A deck that fails validation used to be returned untouched, which left every newer field undefined and drew
+ * cards wrong rather than loudly failing. Now its missing keys are filled from a fresh deck instead.
+ */
 export function normalizeDeck(stored: Deck): Deck {
   const result = Deck.safeParse(stored)
-  if (!result.success) return stored
-  const { cards: _ignored, ...deck } = result.data
-  return deck
+  if (result.success) {
+    const { cards: _ignored, ...deck } = result.data
+    return deck
+  }
+  console.warn('Stored deck did not match the schema; filling in defaults.', result.error.issues.slice(0, 5))
+  return fillMissing(stored, createDeck()) as Deck
+}
+
+/** Copy anything the template has and the value lacks, without touching what the value already says. */
+function fillMissing(value: unknown, template: unknown): unknown {
+  if (Array.isArray(value) && Array.isArray(template)) {
+    return value.map((item, i) => fillMissing(item, template[i] ?? template[0]))
+  }
+  if (isPlainObject(value) && isPlainObject(template)) {
+    const out: Record<string, unknown> = { ...value }
+    for (const [key, fallback] of Object.entries(template)) {
+      out[key] = key in value ? fillMissing(value[key], fallback) : structuredClone(fallback)
+    }
+    return out
+  }
+  return value
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 function slug(deck: Deck): string {

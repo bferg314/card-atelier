@@ -42,3 +42,21 @@ describe('rasterised markup', () => {
     expect(svg.indexOf('<style>')).toBeLessThan(svg.indexOf('<defs>'))
   })
 })
+
+describe('court cards from older decks', () => {
+  it('still draws the monogram when the deck predates the setting', () => {
+    const older = createDeck()
+    delete (older as { courtCentre?: unknown }).courtCentre
+    const king = listCards(older).find((c) => c.id === 'hearts-K')!
+    const svg = renderToStaticMarkup(<CardSvg deck={older} card={king} />)
+    const current = renderToStaticMarkup(<CardSvg deck={createDeck()} card={king} />)
+    expect((svg.match(/>K</g) ?? []).length).toBe((current.match(/>K</g) ?? []).length)
+  })
+
+  it('names its ids after the card when one is asked for, so several cards can share a page', () => {
+    const king = listCards(deck).find((c) => c.id === 'hearts-K')!
+    const svg = renderToStaticMarkup(<CardSvg deck={deck} card={king} idPrefix="hearts-K" />)
+    expect(svg).toContain('id="hearts-K-card"')
+    expect(svg).not.toMatch(/id="c[Rr]/)
+  })
+})

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Deck } from './schema'
 import { listCards, resolveCards } from './resolve'
-import { cardSubject } from './artbox'
+import { cardSubject, indexHeightMm } from './artbox'
 import { dataUriBytes, type ZipEntry } from './zip'
 import pkg from '../../package.json'
 
@@ -18,16 +18,22 @@ export const OPEN_SCHEMA_URL = 'https://raw.githubusercontent.com/bferg314/card-
 export const FRENCH_SUITS = ['spades', 'hearts', 'diamonds', 'clubs']
 export const FRENCH_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
 
+/**
+ * A path inside the deck folder: no leading slash and no ".." segment, so a reader unpacking a zip cannot be
+ * walked out of the folder it chose.
+ */
+const relativePath = (ext: string) => String.raw`(?!/)(?!(?:.*/)?\.\.(?:/|$))[\w.-]+(?:/[\w.-]+)*\.${ext}`
+
 /** An image: a base64 PNG data URI, or a relative path when the deck is packaged as a folder. */
 const imageRef = z
   .string()
-  .regex(/^(data:image\/png;base64,[A-Za-z0-9+/=]+|[\w./-]+\.png)$/)
-  .describe('PNG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder.')
+  .regex(new RegExp(String.raw`^(data:image/png;base64,[A-Za-z0-9+/=]+|${relativePath('png')})$`))
+  .describe('PNG image: a base64 data: URI, or a path relative to this file (no leading "/" and no ".." segment).')
 /** The same picture as vector art, with every letter already outlined so no font is needed. */
 const vectorRef = z
   .string()
-  .regex(/^(data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+|[\w./-]+\.svg)$/)
-  .describe('SVG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder.')
+  .regex(new RegExp(String.raw`^(data:image/svg\+xml;base64,[A-Za-z0-9+/=]+|data:image/svg\+xml,[^"']+|${relativePath('svg')})$`))
+  .describe('SVG image: a data: URI, base64 or percent-encoded, or a path relative to this file (no leading "/" and no ".." segment).')
 const hex = z
   .string()
   .regex(/^#([0-9a-f]{6}|[0-9a-f]{8})$/)
@@ -66,12 +72,12 @@ export const OpenDeck = z.object({
     heightMm: z.number(),
     cornerRadiusMm: z.number(),
     bleedMm: z.number().optional().describe('Extra image beyond the trim size on every side, for printing. Absent or 0 means the image is trimmed to size.'),
-    imageWidth: z.int().min(1).describe('Pixel width of every image in the file, bleed included.'),
-    imageHeight: z.int().min(1),
-    dpi: z.number(),
+    imageWidth: z.int().min(1).optional().describe('Pixel width of every PNG in the file, bleed included. Absent when the deck ships vector cards only.'),
+    imageHeight: z.int().min(1).optional(),
+    dpi: z.number().optional().describe('Resolution the PNGs were rendered at. Absent when the deck ships vector cards only.'),
   }),
   suits: z.array(z.object({ id: z.string(), name: z.string(), symbol: z.string(), color: hex, order: z.int().min(0) })),
-  ranks: z.array(z.object({ id: z.string(), label: z.string(), value: z.number() })),
+  ranks: z.array(z.object({ id: z.string(), label: z.string(), value: z.number(), indexHeightMm: z.number().describe('Drawn height of this rank’s corner index. Compare with card.heightMm to judge whether it survives the size you draw at.') })),
   back: z.object({ image: imageRef.optional(), vector: vectorRef.optional() }),
   cards: z.array(OpenCard).describe('Every card in play order: suit by suit, ranks ascending, jokers last.'),
 })
@@ -117,6 +123,7 @@ export interface Pictures {
 export function buildOpenDeck(deck: Deck, pictures: Pictures, raster: Raster, options: BuildOptions = {}): OpenDeck {
   const refs = listCards(deck)
   const { images, vectors = {} } = pictures
+  const hasPng = Object.keys(images).length > 0
   const picture = (id: string) => {
     const of = { ...(images[id] ? { image: images[id] } : {}), ...(vectors[id] ? { vector: vectors[id] } : {}) }
     if (!of.image && !of.vector) throw new Error(`No picture rendered for ${id}.`)
@@ -147,22 +154,46 @@ export function buildOpenDeck(deck: Deck, pictures: Pictures, raster: Raster, op
       heightMm: deck.card.heightMm,
       cornerRadiusMm: deck.card.cornerRadiusMm,
       ...(raster.bleedMm ? { bleedMm: raster.bleedMm } : {}),
-      imageWidth: raster.width,
-      imageHeight: raster.height,
-      dpi: raster.dpi,
+      ...(hasPng ? { imageWidth: raster.width, imageHeight: raster.height, dpi: raster.dpi } : {}),
     },
     suits: deck.suits.map(({ id, name, symbol, color }, order) => ({ id, name, symbol, color: normalizeHex(color), order })),
-    ranks: deck.ranks.map(({ id, label, value }) => ({ id, label, value })),
+    ranks: deck.ranks.map((r) => ({ id: r.id, label: r.label, value: r.value, indexHeightMm: Number(indexHeightMm(deck.card, r).toFixed(2)) })),
     back: picture('back'),
     cards,
   }
   return file
 }
 
-/** What contentHash covers: everything that describes the deck, and nothing that changes on every export. */
-export function hashableJson(file: OpenDeck): string {
+/**
+ * What contentHash covers: everything that describes the deck, and nothing that changes between exports of it.
+ *
+ * Pictures are replaced by the SHA-256 of their bytes rather than by their reference, so the single-file and
+ * zipped forms of one deck hash alike, and keys are sorted, so any writer can reproduce the value. The spec
+ * states this algorithm; `digest` turns a picture reference into the hash of the bytes behind it.
+ */
+export function canonicalJson(file: OpenDeck, digest: (ref: string) => string): string {
+  const picture = (p: { image?: string; vector?: string }) => ({
+    ...(p.image ? { image: digest(p.image) } : {}),
+    ...(p.vector ? { vector: digest(p.vector) } : {}),
+  })
   const { $schema: _s, contentHash: _h, createdAt: _c, generator: _g, ...rest } = file
-  return JSON.stringify(rest)
+  return stableJson({
+    ...rest,
+    back: { ...rest.back, ...picture(rest.back) },
+    cards: rest.cards.map((c) => ({ ...c, ...picture(c) })),
+  })
+}
+
+/** JSON with every object's keys in sorted order, so the text depends only on the content. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']'
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + stableJson(v)).join(',') + '}'
+  }
+  return JSON.stringify(value) ?? 'null'
 }
 
 /** "Joker, Joker" reads as one card twice, so repeated names are numbered. */

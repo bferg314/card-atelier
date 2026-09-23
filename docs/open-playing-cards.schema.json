@@ -84,10 +84,10 @@
           "type": "number"
         },
         "imageWidth": {
+          "description": "Pixel width of every PNG in the file, bleed included. Absent when the deck ships vector cards only.",
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
-          "description": "Pixel width of every image in the file, bleed included."
+          "maximum": 9007199254740991
         },
         "imageHeight": {
           "type": "integer",
@@ -95,16 +95,14 @@
           "maximum": 9007199254740991
         },
         "dpi": {
+          "description": "Resolution the PNGs were rendered at. Absent when the deck ships vector cards only.",
           "type": "number"
         }
       },
       "required": [
         "widthMm",
         "heightMm",
-        "cornerRadiusMm",
-        "imageWidth",
-        "imageHeight",
-        "dpi"
+        "cornerRadiusMm"
       ]
     },
     "suits": {
@@ -154,12 +152,17 @@
           },
           "value": {
             "type": "number"
+          },
+          "indexHeightMm": {
+            "type": "number",
+            "description": "Drawn height of this rank’s corner index. Compare with card.heightMm to judge whether it survives the size you draw at."
           }
         },
         "required": [
           "id",
           "label",
-          "value"
+          "value",
+          "indexHeightMm"
         ]
       }
     },
@@ -168,13 +171,13 @@
       "properties": {
         "image": {
           "type": "string",
-          "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$",
-          "description": "PNG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder."
+          "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|(?!\\/)(?!(?:.*\\/)?\\.\\.(?:\\/|$))[\\w.-]+(?:\\/[\\w.-]+)*\\.png)$",
+          "description": "PNG image: a base64 data: URI, or a path relative to this file (no leading \"/\" and no \"..\" segment)."
         },
         "vector": {
           "type": "string",
-          "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.svg)$",
-          "description": "SVG image: a base64 data: URI, or a path relative to this file when the deck is packaged as a folder."
+          "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|data:image\\/svg\\+xml,[^\"']+|(?!\\/)(?!(?:.*\\/)?\\.\\.(?:\\/|$))[\\w.-]+(?:\\/[\\w.-]+)*\\.svg)$",
+          "description": "SVG image: a data: URI, base64 or percent-encoded, or a path relative to this file (no leading \"/\" and no \"..\" segment)."
         }
       },
       "anyOf": [
@@ -249,12 +252,12 @@
           "image": {
             "description": "The card face at card.imageWidth × card.imageHeight, with transparent rounded corners.",
             "type": "string",
-            "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.png)$"
+            "pattern": "^(data:image\\/png;base64,[A-Za-z0-9+/=]+|(?!\\/)(?!(?:.*\\/)?\\.\\.(?:\\/|$))[\\w.-]+(?:\\/[\\w.-]+)*\\.png)$"
           },
           "vector": {
             "description": "The same face as vector art, text outlined, sharp at any size. Prefer it when drawing small.",
             "type": "string",
-            "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|[\\w./-]+\\.svg)$"
+            "pattern": "^(data:image\\/svg\\+xml;base64,[A-Za-z0-9+/=]+|data:image\\/svg\\+xml,[^\"']+|(?!\\/)(?!(?:.*\\/)?\\.\\.(?:\\/|$))[\\w.-]+(?:\\/[\\w.-]+)*\\.svg)$"
           }
         },
         "required": [

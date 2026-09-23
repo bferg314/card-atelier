@@ -15,6 +15,20 @@ export function artBox(card: Deck['card'], frame: ArtFrame): Box {
   return { x, y, w: card.widthMm - 2 * x, h: card.heightMm - 2 * y }
 }
 
+/** Cap height as a share of the font size: how much of a capital letter is actually ink. */
+export const INDEX_CAP = 0.7
+
+/** Font size of a rank's corner index, in mm. Two-character ranks like "10" are set a little smaller. */
+export function indexFontSize(card: Deck['card'], rank: { label: string; lettering: { corner: { scale: number } } }): number {
+  const s = card.widthMm / 63.5
+  return (rank.label.length > 1 ? 6.2 : 7.2) * s * rank.lettering.corner.scale
+}
+
+/** Drawn height of a rank's corner index, in mm. */
+export function indexHeightMm(card: Deck['card'], rank: { label: string; lettering: { corner: { scale: number } } }): number {
+  return INDEX_CAP * indexFontSize(card, rank)
+}
+
 /** Ratios that common image generators offer as presets. */
 const COMMON_RATIOS: [number, number][] = [
   [1, 1], [5, 4], [4, 5], [4, 3], [3, 4], [3, 2], [2, 3], [7, 5], [5, 7], [16, 9], [9, 16], [2, 1], [1, 2],

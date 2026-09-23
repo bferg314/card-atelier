@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDeck, THEMES } from './presets'
-import { DeckImportError, fileNameFor, parseDeck, serializeDeck } from './io'
+import { DeckImportError, fileNameFor, normalizeDeck, parseDeck, serializeDeck } from './io'
 import { resolveCards } from './resolve'
 import { artBox, artPrompt, cardSubject, ratioAdvice } from './artbox'
 
@@ -110,5 +110,21 @@ describe('court cards without a picture', () => {
     const old = JSON.parse(serializeDeck(deck))
     delete old.courtCentre
     expect(parseDeck(JSON.stringify(old)).courtCentre).toBe('monogram')
+  })
+})
+
+describe('decks read back from storage', () => {
+  it('fills fields added since the deck was saved, even when it no longer validates', () => {
+    const stored = JSON.parse(serializeDeck(createDeck())) as Record<string, unknown>
+    delete stored.courtCentre
+    delete stored.artFrame
+    // Something the schema rejects, so the strict parse cannot rescue it.
+    ;(stored.card as Record<string, unknown>).widthMm = 'oops'
+    const deck = normalizeDeck(stored as never)
+    expect(deck.courtCentre).toBe('monogram')
+    expect(deck.artFrame.shape).toBe('rect')
+    // Whatever the deck did say is left alone, including the odd value.
+    expect(deck.name).toBe('Classic Deck')
+    expect(deck.card.widthMm).toBe('oops')
   })
 })

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createDeck } from './presets'
 import { listCards } from './resolve'
 import { DeckImportError, parseDeck } from './io'
-import { buildOpenDeck, frenchDeckType, hashableJson, openJsonSchema, OpenDeck, rasterFor, toFolder } from './open'
+import { buildOpenDeck, canonicalJson, frenchDeckType, openJsonSchema, OpenDeck, rasterFor, toFolder } from './open'
 
 const PNG = 'data:image/png;base64,iVBORw0KGgo='
 const SVG = 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
@@ -21,6 +21,7 @@ describe('open playing cards', () => {
     const file = OpenDeck.parse(buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 300)))
     expect(file.cards).toHaveLength(54)
     expect(file.card).toMatchObject({ imageWidth: 750, imageHeight: 1050, dpi: 300 })
+    expect(file.ranks.find((r) => r.id === 'K')?.indexHeightMm).toBeCloseTo(5.04, 2)
     expect(file.cards.find((c) => c.id === 'hearts-K')).toMatchObject({ name: 'King of Hearts', value: 13, suit: 'hearts', label: 'K♥' })
     expect(file.cards.find((c) => c.id === 'spades-A')?.name).toBe('Ace of Spades')
     expect(file.cards.at(-1)).toMatchObject({ kind: 'joker', name: 'Joker 2', suit: null, rank: null, value: null })
@@ -77,13 +78,23 @@ describe('open format, fields for readers', () => {
     expect(file.cards.slice(-2).map((c) => c.name)).toEqual(['Joker 1', 'Joker 2'])
   })
 
-  it('hashes the deck, not the moment it was exported', () => {
+  it('hashes the deck, not the moment or the packaging of the export', () => {
     const deck = createDeck()
+    // Stand-in for the real digest: every picture here is the same one byte-for-byte.
+    const digest = () => 'picture-hash'
     const a = build(deck)
     const b = buildOpenDeck(deck, { images: stubImages(deck) }, rasterFor(deck.card, 150), { createdAt: '2020-01-01T00:00:00.000Z' })
-    expect(hashableJson(a)).toBe(hashableJson(b))
+    expect(canonicalJson(a, digest)).toBe(canonicalJson(b, digest))
+
+    // The same deck written as a folder refers to files instead of data URIs, and must still hash the same.
+    const folder = OpenDeck.parse(JSON.parse(new TextDecoder().decode(toFolder(a)[0].data)))
+    expect(canonicalJson(folder, digest)).toBe(canonicalJson(a, digest))
+
+    // Key order in the written file must not matter either.
+    expect(canonicalJson(reversedKeys(a) as typeof a, digest)).toBe(canonicalJson(a, digest))
+
     deck.suits[0].color = '#123456'
-    expect(hashableJson(build(deck))).not.toBe(hashableJson(a))
+    expect(canonicalJson(build(deck), digest)).not.toBe(canonicalJson(a, digest))
   })
 
   it('publishes a schema without generator artefacts', () => {
@@ -125,6 +136,9 @@ describe('vector cards', () => {
     const svgOnly = OpenDeck.parse(buildOpenDeck(deck, { images: {}, vectors: vectors(deck) }, rasterFor(deck.card, 150)))
     expect(svgOnly.cards[0].image).toBeUndefined()
     expect(svgOnly.cards[0].vector).toBe(SVG)
+    // Pixel measurements describe the PNGs, so a vector-only deck leaves them out and still validates.
+    expect(svgOnly.card.imageWidth).toBeUndefined()
+    expect(svgOnly.card.dpi).toBeUndefined()
   })
 
   it('refuses a card with no picture at all', () => {
@@ -148,3 +162,33 @@ describe('vector cards', () => {
     expect(schema.properties.cards.items.anyOf).toEqual([{ required: ['image'] }, { required: ['vector'] }])
   })
 })
+
+describe('picture references', () => {
+  const ref = (v: string) => OpenDeck.safeParse({ ...valid, cards: [{ ...valid.cards[0], image: undefined, vector: v }] }).success
+  const valid = buildOpenDeck(createDeck(), { images: stubImages(createDeck()) }, rasterFor(createDeck().card, 150))
+
+  it('accepts either data URI form for SVG', () => {
+    expect(ref('data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=')).toBe(true)
+    expect(ref('data:image/svg+xml,%3Csvg%3E%3C/svg%3E')).toBe(true)
+  })
+
+  it('refuses paths that climb out of the deck folder', () => {
+    expect(ref('cards/hearts-K.svg')).toBe(true)
+    expect(ref('../../etc/passwd.svg')).toBe(false)
+    expect(ref('/etc/passwd.svg')).toBe(false)
+    expect(ref('cards/../../x.svg')).toBe(false)
+  })
+})
+
+/** The same data with every object's keys written in the opposite order. */
+function reversedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reversedKeys)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .reverse()
+        .map(([k, v]) => [k, reversedKeys(v)]),
+    )
+  }
+  return value
+}

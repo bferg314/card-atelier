@@ -2,12 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Deck } from '../model/schema'
 import { listCards } from '../model/resolve'
 import { usedFamilies } from '../model/fontsync'
-import { buildOpenDeck, hashableJson, rasterFor, type OpenDeck } from '../model/open'
+import { buildOpenDeck, canonicalJson, rasterFor, type OpenDeck } from '../model/open'
 import { googleFontCssUrl, SYSTEM_FONTS } from '../fonts/fonts'
 import { CardSvg } from './CardSvg'
 import { readAsDataUrl } from '../model/images'
-import { sha256 } from '../model/sha256'
-import { toBase64 } from '../model/zip'
+import { sha256, sha256Bytes } from '../model/sha256'
+import { dataUriBytes, toBase64 } from '../model/zip'
 import { loadFonts, outlineSvg } from './outline'
 
 export interface SnapshotResult {
@@ -39,7 +39,7 @@ export async function snapshotDeck(deck: Deck, options: SnapshotOptions, onProgr
   for (const [i, card] of targets.entries()) {
     onProgress(i, targets.length)
     const id = card === 'back' ? 'back' : card.id
-    const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} bleedMm={bleedMm} />)
+    const markup = renderToStaticMarkup(<CardSvg deck={deck} card={card} bleedMm={bleedMm} idPrefix={id} />)
     if (wantPng) pngs[id] = await rasterize(markup, css, raster.width, raster.height)
     if (wantSvg) {
       const { svg, missing: unread } = outlineSvg(vectorRoot(markup, deck, bleedMm), fonts)
@@ -54,7 +54,13 @@ export async function snapshotDeck(deck: Deck, options: SnapshotOptions, onProgr
   if (wantSvg) unoutlined.forEach((f) => warnings.add(f))
 
   const draft = buildOpenDeck(deck, { images: pngs, vectors }, raster)
-  const file = buildOpenDeck(deck, { images: pngs, vectors }, raster, { contentHash: sha256(hashableJson(draft)), createdAt: draft.createdAt })
+  const digests = new Map<string, string>()
+  const digest = (ref: string) => {
+    let hash = digests.get(ref)
+    if (!hash) digests.set(ref, (hash = sha256Bytes(dataUriBytes(ref))))
+    return hash
+  }
+  const file = buildOpenDeck(deck, { images: pngs, vectors }, raster, { contentHash: sha256(canonicalJson(draft, digest)), createdAt: draft.createdAt })
   return { file, missingFonts: [...warnings] }
 }
 

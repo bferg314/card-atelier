@@ -11,7 +11,10 @@ const K = new Uint32Array([
 ])
 
 export function sha256(text: string): string {
-  const bytes = new TextEncoder().encode(text)
+  return sha256Bytes(new TextEncoder().encode(text))
+}
+
+export function sha256Bytes(bytes: Uint8Array): string {
   const bitLength = bytes.length * 8
   // Message, a 0x80 byte, zero padding to a multiple of 64, and the length as a 64-bit big-endian count.
   const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64)

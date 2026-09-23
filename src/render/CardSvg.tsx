@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react'
 import type { Back, Deck, FontRef, FrameShape, ImageFit, Joker, Lettering, Suit } from '../model/schema'
 import type { CardRef } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
-import { artBox } from '../model/artbox'
+import { artBox, INDEX_CAP, indexFontSize } from '../model/artbox'
 import { fontStack } from '../fonts/fonts'
 import { normalizeSymbol, PIP_LAYOUTS, SUIT_PATHS } from './pips'
 
@@ -13,11 +13,17 @@ interface Props {
   className?: string
   /** Millimetres of printable bleed on every side. With bleed the card is drawn square and edge to edge. */
   bleedMm?: number
+  /**
+   * Prefix for the ids this card defines. Exports pass the card's id, so several cards can be dropped into one
+   * page or sprite sheet without their clip paths colliding; in the app a per-instance id keeps duplicates apart.
+   */
+  idPrefix?: string
 }
 
 /** Renders one card as SVG in millimetre units, so it scales cleanly at any size. */
-export function CardSvg({ deck, card, className, bleedMm = 0 }: Props) {
-  const uid = 'c' + useId().replace(/[^a-zA-Z0-9]/g, '')
+export function CardSvg({ deck, card, className, bleedMm = 0, idPrefix }: Props) {
+  const instance = 'c' + useId().replace(/[^a-zA-Z0-9]/g, '')
+  const uid = idPrefix ? idPrefix.replace(/[^a-zA-Z0-9_-]/g, '') : instance
   const { widthMm: W, heightMm: H, cornerRadiusMm: R, background, border } = deck.card
   const inset = border.widthMm / 2
   const b = Math.max(0, bleedMm)
@@ -150,16 +156,13 @@ function Panel({ deck, x, y, w, h, tintColor, clipId, children }: { deck: Deck; 
 
 /** Room kept below the baseline for letters with a tail (J, Q), as a fraction of the font size. */
 const DESCENT = 0.3
-/** Cap height as a fraction of the font size, used to keep the top of a resized corner label in place. */
-const CAP = 0.7
-
 function Corners({ deck, suit, label, lettering }: { deck: Deck; suit: Suit; label: string; lettering: Lettering['corner'] }) {
   const { widthMm: W, heightMm: H } = deck.card
   const s = W / 63.5
-  const base = label.length > 1 ? 6.2 * s : 7.2 * s
+  const base = indexFontSize(deck.card, { label, lettering: { corner: { scale: 1 } } })
   const size = base * lettering.scale
   // The top of the label stays put as it grows; the pip moves down to keep clear of any tail.
-  const baseline = 9.2 * s - CAP * base + CAP * size
+  const baseline = 9.2 * s - INDEX_CAP * base + INDEX_CAP * size
   // The pip grows with the letter, so a resized index stays a matched pair.
   const pipSize = 4.4 * s * lettering.scale
   const pipY = baseline + DESCENT * size + 0.5 * s + pipSize / 2
@@ -264,7 +267,8 @@ function CourtMonogram({ deck, suit, label, lettering, clipId, x, y, w, h }: { d
   const pipSize = 5.6 * s
   // Sit the baseline high enough that a tail (J, Q) clears the pip, then apply the rank's own nudge.
   const baseline = pipY - pipSize / 2 - 1.2 * s - DESCENT * fontSize + lettering.y * s
-  const centre = deck.courtCentre
+  // A deck stored before this setting existed has no value, and must still draw its monogram.
+  const centre = deck.courtCentre ?? 'monogram'
   const half = (
     <g>
       {centre === 'monogram' && (
