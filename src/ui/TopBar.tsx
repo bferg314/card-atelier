@@ -251,7 +251,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     try {
       // Loaded on demand: the renderer pulls in react-dom/server, which the editor does not otherwise need.
       const { snapshotDeck } = await import('../render/snapshot')
-      const { file, missingFonts } = await snapshotDeck(deck, { dpi: Number(dpi), bleedMm, images }, (done, total) => setProgress({ done, total }))
+      const { file, missingFonts, unweightedFonts } = await snapshotDeck(deck, { dpi: Number(dpi), bleedMm, images }, (done, total) => setProgress({ done, total }))
       const name = as === 'json' ? openFileNameFor(deck) : openFolderNameFor(deck)
       const size =
         as === 'json'
@@ -266,7 +266,9 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
               return bytes.length
             })()
       notify(`Saved ${name} (${(size / 1_048_576).toFixed(1)} MB)`)
-      if (missingFonts.length) setWarning(
+      if (unweightedFonts.length)
+        setWarning(`${unweightedFonts.join(', ')} is a variable font whose weighted outlines could not be fetched, so the vector cards use its default weight. Check your connection and export again.`)
+      else if (missingFonts.length) setWarning(
           images === 'png'
             ? `Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`
             : `Could not read ${missingFonts.join(', ')}, so its lettering stays as live text in the vector cards instead of outlines, and needs the font to render. System fonts cannot be outlined; otherwise check your connection and export again.`,

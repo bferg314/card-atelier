@@ -112,32 +112,43 @@ function runsOf(text: Element, style: TextStyle): { text: string; x: number; y: 
   return runs
 }
 
-const cache = new Map<string, Promise<Font | null>>()
+interface Loaded {
+  font: Font | null
+  /** True when the font is variable but only its default weight could be read. */
+  unweighted?: boolean
+}
+
+const cache = new Map<string, Promise<Loaded>>()
+
+export interface LoadedFonts {
+  fonts: FontSet
+  /** Families with no readable font file, whose text stays live. */
+  missing: string[]
+  /** Families drawn at their default weight because the weighted outlines could not be read. */
+  unweighted: string[]
+}
 
 /** Font files for every family and weight the deck draws with. System fonts have no file, so they are reported. */
-export async function loadFonts(deck: Deck): Promise<{ fonts: FontSet; missing: string[] }> {
+export async function loadFonts(deck: Deck): Promise<LoadedFonts> {
   const fonts: FontSet = new Map()
   const missing: string[] = []
+  const unweighted: string[] = []
+  const weights = [400, 700]
   for (const family of drawnFamilies(deck)) {
     if (SYSTEM_FONTS.includes(family)) {
       missing.push(family)
       continue
     }
     const source = deck.fonts.find((f) => f.family === family)
-    if (source?.source === 'embedded') {
-      const font = parse(dataUriBytes(source.data))
-      if (font) {
-        // An uploaded file is one weight; use it wherever that family is asked for.
-        fonts.set(key(family, 400), font)
-        fonts.set(key(family, 700), font)
-      } else missing.push(family)
-      continue
-    }
-    const loaded = await Promise.all([400, 700].map((w) => google(family, w)))
-    if (loaded.every((f) => !f)) missing.push(family)
-    loaded.forEach((font, i) => font && fonts.set(key(family, [400, 700][i]), font))
+    const loaded = await Promise.all(
+      // An uploaded file is one weight unless it is variable, in which case each weight is instanced from it.
+      weights.map((w) => (source?.source === 'embedded' ? parse(dataUriBytes(source.data), w) : google(family, w))),
+    )
+    if (loaded.every((l) => !l.font)) missing.push(family)
+    else if (loaded.some((l) => l.unweighted)) unweighted.push(family)
+    loaded.forEach((l, i) => l.font && fonts.set(key(family, weights[i]), l.font))
   }
-  return { fonts, missing }
+  return { fonts, missing, unweighted }
 }
 
 /** Families the cards actually draw with. A disabled joker's font is not worth warning about. */
@@ -147,31 +158,52 @@ function drawnFamilies(deck: Deck): Set<string> {
   return families
 }
 
-function google(family: string, weight: number): Promise<Font | null> {
+function google(family: string, weight: number): Promise<Loaded> {
   const id = key(family, weight)
   let pending = cache.get(id)
   if (!pending) {
-    pending = fetchGoogleFont(family, weight).catch(() => null)
+    pending = fetchGoogleFont(family, weight).catch(() => ({ font: null }))
     cache.set(id, pending)
   }
   return pending
 }
 
-async function fetchGoogleFont(family: string, weight: number): Promise<Font | null> {
+async function fetchGoogleFont(family: string, weight: number): Promise<Loaded> {
   const res = await fetch(googleFontCssUrl(family))
-  if (!res.ok) return null
+  if (!res.ok) return { font: null }
   const css = await res.text()
   // Google serves one @font-face per weight and subset; take the Latin one for the weight asked for.
   const blocks = css.match(/@font-face\s*\{[^}]*\}/g) ?? []
   const block = blocks.find((b) => b.includes(`font-weight: ${weight}`) && b.includes('U+0000-00FF'))
   const url = block?.match(/url\((https:[^)]+)\)/)?.[1]
-  if (!url) return null
+  if (!url) return { font: null }
   const file = await fetch(url)
-  if (!file.ok) return null
-  return parse(new Uint8Array(await file.arrayBuffer()))
+  if (!file.ok) return { font: null }
+  return parse(new Uint8Array(await file.arrayBuffer()), weight, family)
 }
 
-function parse(bytes: Uint8Array): Font | null {
+/**
+ * Most Google families now ship one variable font for every weight, and the browser applies the weight itself.
+ * fontkit can only instance a variable font from an uncompressed sfnt, and Google serves woff2, so for those
+ * families the same font is fetched uncompressed from the Google Fonts repository and pinned to the weight the
+ * card asks for. Without this, outlined text came out at the font's default instance: Playfair's Regular where
+ * the card wanted Bold, and hairline letters for a family whose default is Thin, such as Josefin Sans.
+ */
+async function parse(bytes: Uint8Array, weight: number, family?: string): Promise<{ font: Font | null; unweighted?: boolean }> {
+  const font = create(bytes)
+  const axis = font?.variationAxes?.wght
+  if (!font || !axis) return { font }
+  const instanced = family ? create(await uncompressedFont(family)) : null
+  const source = instanced ?? font
+  const range = source.variationAxes?.wght
+  if (!range) return { font: source }
+  const at = source.getVariation({ wght: Math.max(range.min, Math.min(range.max, weight)) }) as Font
+  // Without an uncompressed copy the outlines are the font's default weight, which is worth saying out loud.
+  return { font: at, unweighted: !instanced }
+}
+
+function create(bytes: Uint8Array | null): Font | null {
+  if (!bytes) return null
   try {
     const font = fontkit.create(bytes as unknown as Buffer)
     return 'layout' in font ? (font as Font) : null
@@ -179,3 +211,37 @@ function parse(bytes: Uint8Array): Font | null {
     return null
   }
 }
+
+const MIRROR = 'https://cdn.jsdelivr.net/gh/google/fonts@main'
+const uncompressed = new Map<string, Promise<Uint8Array | null>>()
+
+/** The family's variable font as a plain .ttf, from the repository Google Fonts is published from. */
+function uncompressedFont(family: string): Promise<Uint8Array | null> {
+  let pending = uncompressed.get(family)
+  if (!pending) {
+    pending = findUncompressed(family).catch(() => null)
+    uncompressed.set(family, pending)
+  }
+  return pending
+}
+
+/** Where a family's variable font sits in the Google Fonts repository, most likely first. */
+export function mirrorPaths(family: string): string[] {
+  const name = family.replace(/\s+/g, '')
+  const paths: string[] = []
+  for (const licence of ['ofl', 'apache', 'ufl']) {
+    for (const file of [`${name}[wght].ttf`, `${name}[ital,wght].ttf`]) {
+      paths.push(`${MIRROR}/${licence}/${name.toLowerCase()}/${encodeURIComponent(file)}`)
+    }
+  }
+  return paths
+}
+
+async function findUncompressed(family: string): Promise<Uint8Array | null> {
+  for (const url of mirrorPaths(family)) {
+    const res = await fetch(url)
+    if (res.ok) return new Uint8Array(await res.arrayBuffer())
+  }
+  return null
+}
+

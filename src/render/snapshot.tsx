@@ -14,6 +14,8 @@ export interface SnapshotResult {
   file: OpenDeck
   /** Families that could not be embedded or outlined, so those cards fell back to another typeface. */
   missingFonts: string[]
+  /** Families drawn at their default weight in the vector cards, because the weighted outlines could not be read. */
+  unweightedFonts: string[]
 }
 
 export interface SnapshotOptions {
@@ -31,7 +33,7 @@ export async function snapshotDeck(deck: Deck, options: SnapshotOptions, onProgr
   const wantSvg = want !== 'png'
   const { css, missing } = await fontFaces(deck)
   const warnings = new Set(wantPng ? missing : [])
-  const { fonts, missing: unoutlined } = wantSvg ? await loadFonts(deck) : { fonts: new Map(), missing: [] }
+  const { fonts, missing: unoutlined, unweighted } = wantSvg ? await loadFonts(deck) : { fonts: new Map(), missing: [], unweighted: [] }
   const targets = [...listCards(deck), 'back' as const]
   const pngs: Record<string, string> = {}
   const vectors: Record<string, string> = {}
@@ -61,7 +63,7 @@ export async function snapshotDeck(deck: Deck, options: SnapshotOptions, onProgr
     return hash
   }
   const file = buildOpenDeck(deck, { images: pngs, vectors }, raster, { contentHash: sha256(canonicalJson(draft, digest)), createdAt: draft.createdAt })
-  return { file, missingFonts: [...warnings] }
+  return { file, missingFonts: [...warnings], unweightedFonts: unweighted }
 }
 
 /** The vector card: real millimetre size for print tools, viewBox for anything that scales it. */

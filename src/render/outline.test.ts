@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import * as fontkit from 'fontkit'
 import { describe, expect, it } from 'vitest'
-import { firstFamily, runPath } from './outline'
+import { firstFamily, mirrorPaths, runPath } from './outline'
 
 // A font every Linux box has, so the maths is checked against real glyph metrics.
 const font = fontkit.create(readFileSync('/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf') as never) as fontkit.Font
@@ -38,5 +38,16 @@ describe('text outlining', () => {
     const topOf = (baseline: string | null) => Number(/^M-?[\d.]+ (-?[\d.]+)/.exec(runPath(font, 'K', { ...style, baseline, y: 50 }).d)![1])
     const half = ((font.ascent + font.descent) / 2 / font.unitsPerEm) * 10
     expect(topOf('central')).toBeCloseTo(topOf(null) + half, 1)
+  })
+})
+
+describe('variable fonts', () => {
+  it('looks for the uncompressed font where Google Fonts publishes it', () => {
+    const [first, ...rest] = mirrorPaths('Josefin Sans')
+    expect(first).toBe('https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/josefinsans/JosefinSans%5Bwght%5D.ttf')
+    expect(rest).toContain('https://cdn.jsdelivr.net/gh/google/fonts@main/apache/josefinsans/JosefinSans%5Bwght%5D.ttf')
+    // A family with an italic axis names the file differently.
+    expect(rest).toContain('https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/josefinsans/JosefinSans%5Bital%2Cwght%5D.ttf')
+    expect(mirrorPaths('EB Garamond')[0]).toContain('/ofl/ebgaramond/EBGaramond%5Bwght%5D.ttf')
   })
 })

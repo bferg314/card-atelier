@@ -91,7 +91,7 @@ A game that needs a French deck should check `deckType` and refuse the file clea
 
 ### Vector cards
 
-A `vector` is a complete SVG of the card. Its text is already outlined, so it needs no fonts and draws the same in a browser, in Inkscape and at a print shop. It carries `width` and `height` in millimetres alongside a `viewBox`, so it opens at true size in a design tool and scales to any box on screen. With bleed, the `viewBox` starts at negative coordinates and the millimetre size includes the bleed.
+A `vector` is a complete SVG of the card. Its text is already outlined at the weight the design asks for, so it needs no fonts and draws the same in a browser, in Inkscape and at a print shop. It carries `width` and `height` in millimetres alongside a `viewBox`, so it opens at true size in a design tool and scales to any box on screen. With bleed, the `viewBox` starts at negative coordinates and the millimetre size includes the bleed.
 
 A vector card is self-contained, and a reader may rely on that. It **must** carry no scripts, no event handlers, no references to anything outside the file (no `<use href>` to another document, no external images, no `@import`, no web fonts) and no live text needing a font it does not carry. A reader is still entitled to sanitise what it is given; these rules mean a well-formed deck survives sanitising unchanged.
 
