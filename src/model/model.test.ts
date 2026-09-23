@@ -99,3 +99,16 @@ describe('art frame', () => {
     expect(box.h).toBeGreaterThan(0)
   })
 })
+
+describe('court cards without a picture', () => {
+  it('defaults to the monogram and round trips the other choices', () => {
+    const deck = createDeck()
+    expect(deck.courtCentre).toBe('monogram')
+    deck.courtCentre = 'empty'
+    expect(parseDeck(serializeDeck(deck)).courtCentre).toBe('empty')
+    // decks saved before the setting existed keep the monogram
+    const old = JSON.parse(serializeDeck(deck))
+    delete old.courtCentre
+    expect(parseDeck(JSON.stringify(old)).courtCentre).toBe('monogram')
+  })
+})

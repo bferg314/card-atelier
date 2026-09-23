@@ -264,14 +264,17 @@ function CourtMonogram({ deck, suit, label, lettering, clipId, x, y, w, h }: { d
   const pipSize = 5.6 * s
   // Sit the baseline high enough that a tail (J, Q) clears the pip, then apply the rank's own nudge.
   const baseline = pipY - pipSize / 2 - 1.2 * s - DESCENT * fontSize + lettering.y * s
+  const centre = deck.courtCentre
   const half = (
     <g>
-      <text x={W / 2} y={baseline} fontSize={fontSize} textAnchor="middle" fill={suit.color} {...fontProps(suit.font)}>
-        {label}
-      </text>
-      <Pip suit={suit} x={W / 2} y={pipY} size={pipSize} />
-      <circle cx={W / 2 - 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />
-      <circle cx={W / 2 + 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />
+      {centre === 'monogram' && (
+        <text x={W / 2} y={baseline} fontSize={fontSize} textAnchor="middle" fill={suit.color} {...fontProps(suit.font)}>
+          {label}
+        </text>
+      )}
+      {centre !== 'empty' && <Pip suit={suit} x={W / 2} y={centre === 'pip' ? y + h * 0.27 : pipY} size={centre === 'pip' ? pipSize * 2.4 : pipSize} />}
+      {centre === 'monogram' && <circle cx={W / 2 - 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />}
+      {centre === 'monogram' && <circle cx={W / 2 + 6 * s} cy={y + h * 0.385} r={0.6 * s} fill={accent} />}
       <path
         d={`M${x + 3 * s} ${y + h * 0.5 - 1.5 * s} Q${W / 2} ${y + h * 0.5 - 6 * s} ${x + w - 3 * s} ${y + h * 0.5 - 1.5 * s}`}
         fill="none"
@@ -283,10 +286,14 @@ function CourtMonogram({ deck, suit, label, lettering, clipId, x, y, w, h }: { d
   // The panel clips its children, so a nudged or enlarged letter is trimmed by the frame.
   return (
     <Panel deck={deck} x={x} y={y} w={w} h={h} tintColor={suit.color} clipId={clipId}>
-      {half}
-      <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
-      <line x1={x} y1={H / 2} x2={x + w} y2={H / 2} stroke={accent} strokeWidth={0.3} />
-      <circle cx={W / 2} cy={H / 2} r={1.1 * s} fill={accent} />
+      {centre !== 'empty' && (
+        <>
+          {half}
+          <g transform={`rotate(180 ${W / 2} ${H / 2})`}>{half}</g>
+          <line x1={x} y1={H / 2} x2={x + w} y2={H / 2} stroke={accent} strokeWidth={0.3} />
+          <circle cx={W / 2} cy={H / 2} r={1.1 * s} fill={accent} />
+        </>
+      )}
     </Panel>
   )
 }

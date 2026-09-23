@@ -134,6 +134,7 @@ export function createDeck(themeKey = 'classic', name?: string): Deck {
     suits: suits(theme),
     ranks: STANDARD_RANKS.map((r) => ({ ...r, lettering: defaultLettering() })),
     artFrame: defaultArtFrame(),
+    courtCentre: 'monogram' as const,
     faces: {},
     back: structuredClone(theme.back),
     jokers: {

@@ -3,7 +3,7 @@ import { useStore } from '../state/store'
 import { findCard, listCards } from '../model/resolve'
 import { FACE_RANKS } from '../model/presets'
 import { artBox, artPrompt, cardSubject, ratioAdvice, type ArtArea } from '../model/artbox'
-import { BACK_PATTERNS, defaultArtFrame, defaultLettering, FRAME_SHAPES, type BackPattern, type Deck, type Joker } from '../model/schema'
+import { BACK_PATTERNS, COURT_CENTRES, defaultArtFrame, defaultLettering, FRAME_SHAPES, type BackPattern, type Deck, type Joker } from '../model/schema'
 import { CardSvg } from '../render/CardSvg'
 import { ColorField, Field, FitControls, FontPicker, HelpTip, ImageDrop, Section, Segmented, Select, Slider, TextField, Toggle } from './controls'
 
@@ -519,6 +519,7 @@ function LetteringControls({ rankId, monogram }: { rankId: string; monogram: boo
 }
 
 const SHAPE_LABELS: Record<(typeof FRAME_SHAPES)[number], string> = { rect: 'Rectangle', arch: 'Arch', oval: 'Oval' }
+const CENTRE_LABELS: Record<(typeof COURT_CENTRES)[number], string> = { monogram: 'Monogram', pip: 'Big pip', empty: 'Empty' }
 
 /** The frame around the picture window, shared by every face card and joker in the deck. */
 function ArtFrameControls() {
@@ -540,6 +541,13 @@ function ArtFrameControls() {
         )
       }
     >
+      <Field label="Court cards without a picture" hint="J, Q and K fall back to this">
+        <Segmented
+          value={deck.courtCentre}
+          options={COURT_CENTRES.map((v) => ({ value: v, label: CENTRE_LABELS[v] }))}
+          onChange={(v) => update((d) => void (d.courtCentre = v))}
+        />
+      </Field>
       <Field label="Shape">
         <Segmented value={frame.shape} options={FRAME_SHAPES.map((v) => ({ value: v, label: SHAPE_LABELS[v] }))} onChange={(shape) => set('shape', (f) => void (f.shape = shape))} />
       </Field>

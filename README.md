@@ -30,6 +30,7 @@ The editor's own format. Images and uploaded fonts are embedded as `data:` URIs.
 | `card` | Physical size in mm (`widthMm`, `heightMm`, `cornerRadiusMm`), `background`, `border`, `accent` colors. |
 | `suits[]` | `id`, `name`, `symbol`, `color`, `font` (`family`, `weight`), optional `pipImage`. |
 | `ranks[]` | `id`, `label`, numeric `value` (A = 1 … K = 13), `lettering` (size and mm offsets for the corner index and court monogram, shared by every card of that rank). |
+| `courtCentre` | What fills a court card with no picture: `monogram`, `pip` (a large suit symbol) or `empty`. |
 | `artFrame` | The picture window shared by face cards and jokers: `shape` (`rect`, `arch`, `oval`), margins, `cornerRadiusMm`, `lines` (`double`, `single`, `none`), `widthMm`, `color` (null follows the accent), `tint`. |
 | `faces` | Pictures keyed by card id (`"hearts-K"`): `image`, `fit` (`scale`, `x`, `y`), `mirror`. |
 | `back` | `kind` (`pattern` or `image`), `pattern`, `colors` [ground, ink], `image`, `border`. |

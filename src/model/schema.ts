@@ -87,6 +87,7 @@ export const Joker = z.object({
 })
 
 export const FRAME_SHAPES = ['rect', 'arch', 'oval'] as const
+export const COURT_CENTRES = ['monogram', 'pip', 'empty'] as const
 
 /** The frame around the picture window on face cards and jokers. Lengths are mm at poker width and scale with the card. */
 export const ArtFrame = z.object({
@@ -139,6 +140,7 @@ export const Deck = z.object({
   suits: z.array(Suit).min(1),
   ranks: z.array(Rank).min(1),
   artFrame: ArtFrame.default(defaultArtFrame),
+  courtCentre: z.enum(COURT_CENTRES).default('monogram').describe('What fills a court card with no picture: the rank monogram, the suit pip alone, or nothing.'),
   faces: z.record(z.string(), Face).default({}),
   back: Back,
   jokers: z.object({ enabled: z.boolean(), items: z.array(Joker) }),
@@ -158,6 +160,7 @@ export type BackPattern = (typeof BACK_PATTERNS)[number]
 export type Joker = z.infer<typeof Joker>
 export type ArtFrame = z.infer<typeof ArtFrame>
 export type FrameShape = (typeof FRAME_SHAPES)[number]
+export type CourtCentre = (typeof COURT_CENTRES)[number]
 export type CardSpec = z.infer<typeof CardSpec>
 export type ResolvedCard = z.infer<typeof ResolvedCard>
 export type Deck = z.infer<typeof Deck>
