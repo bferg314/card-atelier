@@ -4,8 +4,11 @@ import * as fontkit from 'fontkit'
 import { describe, expect, it } from 'vitest'
 import { firstFamily, mirrorPaths, runPath } from './outline'
 
-// A font every Linux box has, so the maths is checked against real glyph metrics.
-const font = fontkit.create(readFileSync('/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf') as never) as fontkit.Font
+// A font standard on Linux and Windows, so the maths is checked against real glyph metrics.
+const fontPath = process.platform === 'win32'
+  ? 'C:\\Windows\\Fonts\\times.ttf'
+  : '/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf'
+const font = fontkit.create(readFileSync(fontPath) as never) as fontkit.Font
 const style = { size: 10, spacing: 0, anchor: 'start', baseline: null, x: 0, y: 0 }
 
 describe('text outlining', () => {

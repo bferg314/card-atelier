@@ -5,11 +5,22 @@ import { downloadDeck, downloadFile, downloadJson, fileNameFor, openFileNameFor,
 import { rasterFor, toFolder } from '../model/open'
 import { zip } from '../model/zip'
 import { Segmented, Toggle } from './controls'
-
 import { createDeck, STANDARD_RANKS, THEMES } from '../model/presets'
 import { listCards } from '../model/resolve'
 import { CardSvg } from '../render/CardSvg'
 import { loadDeckFonts } from '../fonts/fonts'
+import {
+  IconUndo,
+  IconRedo,
+  IconNew,
+  IconLibrary,
+  IconImport,
+  IconExport,
+  IconClose,
+  IconTrash,
+  IconCopy,
+  IconCheck,
+} from './icons'
 
 export function TopBar() {
   const deck = useStore((s) => s.deck)
@@ -49,32 +60,52 @@ export function TopBar() {
       </div>
 
       <div className="deck-title">
-        <input className="deck-name" value={deck.name} aria-label="Deck name" onChange={(e) => update((d) => void (d.name = e.target.value || 'Untitled deck'), 'name')} />
+        <input
+          className="deck-name"
+          value={deck.name}
+          aria-label="Deck name"
+          onChange={(e) => update((d) => void (d.name = e.target.value || 'Untitled deck'), 'name')}
+          placeholder="Deck Name"
+        />
         <span className="deck-count">{count} cards</span>
       </div>
 
       <div className="actions">
-        <button type="button" className="btn icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-          ↶
-        </button>
-        <button type="button" className="btn icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-          ↷
-        </button>
-        <span className="divider" />
-        <button type="button" className="btn ghost" onClick={() => setMenu('new')}>
-          New
-        </button>
-        <button type="button" className="btn ghost" onClick={() => setMenu('library')}>
-          Library
-        </button>
-        <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>
-          Import
+        <button
+          type="button"
+          className="btn icon"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+        >
+          <IconUndo size={16} />
         </button>
         <button
           type="button"
-          className="btn primary"
-          onClick={() => setMenu('export')}
+          className="btn icon"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo"
         >
+          <IconRedo size={16} />
+        </button>
+        <span className="divider" />
+        <button type="button" className="btn ghost" onClick={() => setMenu('new')}>
+          <IconNew size={15} />
+          New
+        </button>
+        <button type="button" className="btn ghost" onClick={() => setMenu('library')}>
+          <IconLibrary size={15} />
+          Library
+        </button>
+        <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>
+          <IconImport size={15} />
+          Import
+        </button>
+        <button type="button" className="btn primary" onClick={() => setMenu('export')}>
+          <IconExport size={16} />
           Export
         </button>
         <input
@@ -98,19 +129,30 @@ export function TopBar() {
   )
 }
 
-function Dialog({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function Dialog({
+  title,
+  onClose,
+  children,
+  wide,
+}: {
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+  wide?: boolean
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
   return createPortal(
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`dialog ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="dialog-head">
           <h2>{title}</h2>
-          <button type="button" className="btn icon" onClick={onClose} aria-label="Close">
-            ✕
+          <button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close dialog">
+            <IconClose size={16} />
           </button>
         </header>
         {children}
@@ -122,12 +164,21 @@ function Dialog({ title, onClose, children, wide }: { title: string; onClose: ()
 
 function NewDeckDialog({ onClose }: { onClose: () => void }) {
   const newDeck = useStore((s) => s.newDeck)
+  const past = useStore((s) => s.past)
   const [samples] = useState(() => THEMES.map((t) => createDeck(t.key)))
   useEffect(() => samples.forEach((d) => loadDeckFonts(d.fonts)), [samples])
   const picks = ['hearts-A', 'spades-K', 'diamonds-7']
+
   return (
-    <Dialog title="Start a new deck" onClose={onClose} wide>
-      <p className="dialog-note">Pick a starting style. Everything can be changed afterwards.</p>
+    <Dialog title="Start a New Deck" onClose={onClose} wide>
+      <p className="dialog-note">
+        Select an artisanal starting style. You can customize every detail, typeface, and color afterwards.
+      </p>
+      {past.length > 0 && (
+        <div className="field-hint warn" style={{ marginBottom: 16 }}>
+          Starting a new deck will replace your current workspace. Decks in your Library remain safely stored.
+        </div>
+      )}
       <div className="theme-grid">
         {THEMES.map((t, i) => {
           const d = samples[i]
@@ -162,7 +213,7 @@ function NewDeckDialog({ onClose }: { onClose: () => void }) {
         })}
       </div>
       <p className="dialog-note subtle">
-        Every deck has {STANDARD_RANKS.length * 4} cards plus optional jokers.
+        Every standard deck begins with {STANDARD_RANKS.length * 4} cards plus optional custom jokers.
       </p>
     </Dialog>
   )
@@ -173,9 +224,12 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
   const current = useStore((s) => s.deck.id)
   const { openDeck, deleteDeck, duplicateDeck } = useStore.getState()
   const [confirm, setConfirm] = useState<string | null>(null)
+
   return (
-    <Dialog title="Your decks" onClose={onClose}>
-      <p className="dialog-note">Decks are saved automatically in this browser. Export to JSON to keep a copy or use a deck in a game.</p>
+    <Dialog title="Deck Library" onClose={onClose}>
+      <p className="dialog-note">
+        Decks are saved automatically to your local browser storage. Export as JSON to share or use inside games.
+      </p>
       <ul className="library">
         {library.map((d) => (
           <li key={d.id} className={d.id === current ? 'current' : ''}>
@@ -188,20 +242,39 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
               }}
             >
               <span className="library-name">{d.name}</span>
-              <span className="library-meta">{d.id === current ? 'Open now' : `Edited ${new Date(d.updatedAt).toLocaleString()}`}</span>
+              <span className="library-meta">
+                {d.id === current ? '✦ Active Deck in Workspace' : `Edited ${new Date(d.updatedAt).toLocaleString()}`}
+              </span>
             </button>
             {confirm === d.id ? (
-              <button type="button" className="btn danger small" onClick={() => deleteDeck(d.id)}>
-                Really delete
-              </button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn danger small"
+                  onClick={() => {
+                    deleteDeck(d.id)
+                    setConfirm(null)
+                  }}
+                >
+                  <IconTrash size={12} /> Confirm Delete
+                </button>
+                <button type="button" className="btn ghost small" onClick={() => setConfirm(null)}>
+                  Cancel
+                </button>
+              </div>
             ) : (
-              <button type="button" className="btn ghost small" onClick={() => setConfirm(d.id)}>
-                Delete
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={() => setConfirm(d.id)}
+                title="Delete this deck from browser storage"
+              >
+                <IconTrash size={13} />
               </button>
             )}
           </li>
         ))}
-        {library.length === 0 && <li className="empty">No saved decks yet.</li>}
+        {library.length === 0 && <li className="empty">No saved decks in storage yet.</li>}
       </ul>
       <div className="button-row">
         <button
@@ -212,25 +285,25 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
             onClose()
           }}
         >
-          Duplicate current deck
+          <IconCopy size={15} />
+          Duplicate Current Deck
         </button>
       </div>
     </Dialog>
   )
 }
 
-/** Standard print bleed; enough for any print-on-demand service I know of. */
 const BLEED_MM = 2
 
 const PICTURES = [
-  { value: 'both' as const, label: 'Both' },
-  { value: 'png' as const, label: 'PNG' },
-  { value: 'svg' as const, label: 'SVG' },
+  { value: 'both' as const, label: 'Both (PNG & SVG)' },
+  { value: 'png' as const, label: 'Raster (PNG)' },
+  { value: 'svg' as const, label: 'Vector (SVG)' },
 ]
 
 const RESOLUTIONS = [
-  { value: '150', label: 'Screen' },
-  { value: '300', label: 'Print' },
+  { value: '150', label: 'Screen (150 DPI)' },
+  { value: '300', label: 'Print (300 DPI)' },
 ]
 
 function ExportDialog({ onClose }: { onClose: () => void }) {
@@ -249,9 +322,12 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     setWarning(null)
     setProgress({ done: 0, total: listCards(deck).length + 1 })
     try {
-      // Loaded on demand: the renderer pulls in react-dom/server, which the editor does not otherwise need.
       const { snapshotDeck } = await import('../render/snapshot')
-      const { file, missingFonts, unweightedFonts } = await snapshotDeck(deck, { dpi: Number(dpi), bleedMm, images }, (done, total) => setProgress({ done, total }))
+      const { file, missingFonts, unweightedFonts } = await snapshotDeck(
+        deck,
+        { dpi: Number(dpi), bleedMm, images },
+        (done, total) => setProgress({ done, total }),
+      )
       const name = as === 'json' ? openFileNameFor(deck) : openFolderNameFor(deck)
       const size =
         as === 'json'
@@ -266,14 +342,19 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
               return bytes.length
             })()
       notify(`Saved ${name} (${(size / 1_048_576).toFixed(1)} MB)`)
-      if (unweightedFonts.length)
-        setWarning(`${unweightedFonts.join(', ')} is a variable font whose weighted outlines could not be fetched, so the vector cards use its default weight. Check your connection and export again.`)
-      else if (missingFonts.length) setWarning(
-          images === 'png'
-            ? `Could not embed ${missingFonts.join(', ')}, so those cards use a fallback typeface. Check your connection and export again.`
-            : `Could not read ${missingFonts.join(', ')}, so its lettering stays as live text in the vector cards instead of outlines, and needs the font to render. System fonts cannot be outlined; otherwise check your connection and export again.`,
+      if (unweightedFonts.length) {
+        setWarning(
+          `${unweightedFonts.join(', ')} is a variable font whose weighted outlines could not be fetched. Vector cards will use its default weight.`,
         )
-      else onClose()
+      } else if (missingFonts.length) {
+        setWarning(
+          images === 'png'
+            ? `Could not embed ${missingFonts.join(', ')}. Those cards will use a fallback typeface.`
+            : `Could not read ${missingFonts.join(', ')}. Lettering remains live text instead of vector outlines.`,
+        )
+      } else {
+        onClose()
+      }
     } catch (e) {
       notify(`Export failed: ${(e as Error).message}`, 'error')
     } finally {
@@ -281,13 +362,15 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const progressPercent = progress ? Math.round((progress.done / progress.total) * 100) : 0
+
   return (
-    <Dialog title="Export" onClose={busy ? () => {} : onClose}>
-      <div className="export-option">
-        <div>
-          <h3>Card Atelier file</h3>
-          <p className="dialog-note">Everything needed to reopen and edit this deck: layout, lettering, fonts and pictures. Import it back here any time.</p>
-        </div>
+    <Dialog title="Export Deck" onClose={busy ? () => {} : onClose}>
+      <div className="export-card">
+        <h3>Card Atelier Source (.deck.json)</h3>
+        <p className="dialog-note" style={{ margin: '4px 0 12px' }}>
+          Complete archival project file: card layout, lettering, fonts, and custom artwork. Import back at any time to resume editing.
+        </p>
         <button
           type="button"
           className="btn ghost"
@@ -298,41 +381,74 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
             onClose()
           }}
         >
+          <IconExport size={15} />
           Download .deck.json
         </button>
       </div>
-      <div className="export-option">
-        <div>
-          <h3>Open Playing Cards</h3>
-          <p className="dialog-note">
-            Finished card images for games and other programs, with each card's suit, rank and value. It does not depend on Card Atelier, so it keeps working whatever changes here. See <code>docs/open-playing-cards.md</code>.
-          </p>
-          <Segmented value={images} options={PICTURES} onChange={setImages} />
-          <p className="field-hint">
-            {images === 'svg'
-              ? 'Vector cards with the lettering outlined: sharp at any size, no fonts needed. Uploaded pictures stay as they are.'
-              : images === 'both'
-                ? 'Both, so a game can draw the vector small and keep the PNG for everything else.'
-                : 'Rendered pictures, ready for any engine.'}
-          </p>
+
+      <div className="export-card">
+        <h3>Open Playing Cards Package</h3>
+        <p className="dialog-note" style={{ margin: '4px 0 14px' }}>
+          Production-ready assets for game engines and printing, compliant with the Open Playing Cards standard.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <span className="field-label" style={{ marginBottom: 6, display: 'block' }}>Format</span>
+            <Segmented value={images} options={PICTURES} onChange={setImages} />
+            <p className="field-hint" style={{ marginTop: 6 }}>
+              {images === 'svg'
+                ? 'Vector art with lettering converted to outlines: razor-sharp at any scale.'
+                : images === 'both'
+                  ? 'Includes both vector SVG and raster PNG for maximum compatibility.'
+                  : 'High-fidelity raster images ready for any graphics engine.'}
+            </p>
+          </div>
+
           {images !== 'svg' && (
-            <>
+            <div>
+              <span className="field-label" style={{ marginBottom: 6, display: 'block' }}>Resolution</span>
               <Segmented value={dpi} options={RESOLUTIONS} onChange={setDpi} />
-              <p className="field-hint">
-                {raster.width} × {raster.height} px per card at {dpi} dpi. {dpi === '300' ? 'Sharp in print; a larger file.' : 'Fine on screen; a smaller file.'}
+              <p className="field-hint" style={{ marginTop: 6 }}>
+                Output size: <strong>{raster.width} × {raster.height} px</strong> per card at {dpi} DPI ({dpi === '300' ? 'Archival print grade' : 'Screen & web grade'}).
               </p>
-            </>
+            </div>
           )}
-          <Toggle checked={bleed} onChange={setBleed} label={`Add ${BLEED_MM} mm print bleed (square, opaque edges)`} />
+
+          <Toggle
+            checked={bleed}
+            onChange={setBleed}
+            label={`Add standard ${BLEED_MM} mm print bleed (square, opaque cutting edges)`}
+          />
+
+          {busy && (
+            <div>
+              <div className="export-progress-bar">
+                <div className="export-progress-fill" style={{ width: `${progressPercent}%` }} />
+              </div>
+              <span className="field-hint" style={{ color: 'var(--gilt-200)' }}>
+                Rendering cards: {progress.done} of {progress.total} ({progressPercent}%)…
+              </span>
+            </div>
+          )}
+
           {warning && <p className="field-hint warn">{warning}</p>}
-        </div>
-        <div className="button-row">
-          <button type="button" className="btn primary" disabled={busy} onClick={() => exportOpen('json')}>
-            {progress ? `Rendering ${progress.done} of ${progress.total}` : 'One file (.cards.json)'}
-          </button>
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => exportOpen('folder')} title="A zip holding deck.json and one PNG per card, for game engines">
-            Folder of images (.zip)
-          </button>
+
+          <div className="button-row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn primary" disabled={busy} onClick={() => exportOpen('json')}>
+              <IconCheck size={16} />
+              {progress ? `Rendering ${progressPercent}%` : 'Single File (.cards.json)'}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => exportOpen('folder')}
+              title="A ZIP archive holding deck.json and one PNG per card"
+            >
+              Folder Archive (.zip)
+            </button>
+          </div>
         </div>
       </div>
     </Dialog>
