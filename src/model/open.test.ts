@@ -44,7 +44,7 @@ describe('open playing cards', () => {
   it('matches the published JSON Schema (run `npm run schema` to regenerate)', () => {
     const generated = JSON.stringify(openJsonSchema(), null, 2) + '\n'
     if (process.env.UPDATE_SCHEMA) writeFileSync(SCHEMA_PATH, generated)
-    expect(readFileSync(SCHEMA_PATH, 'utf8')).toBe(generated)
+    expect(readFileSync(SCHEMA_PATH, 'utf8').replace(/\r\n/g, '\n')).toBe(generated)
   })
 })
 

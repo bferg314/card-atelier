@@ -39,7 +39,8 @@ describe('zip writer', () => {
 z = zipfile.ZipFile(${JSON.stringify(path)})
 assert z.testzip() is None
 print(json.dumps({"names": z.namelist(), "json": z.read("deck.json").decode(), "png": list(z.read("cards/hearts-K.png"))}))`
-    const out = JSON.parse(execFileSync('python3', ['-c', script], { encoding: 'utf8' }))
+    const pyCmd = process.platform === 'win32' ? 'python' : 'python3'
+    const out = JSON.parse(execFileSync(pyCmd, ['-c', script], { encoding: 'utf8' }))
     expect(out.names).toEqual(['deck.json', 'cards/hearts-K.png'])
     expect(out.json).toBe('{"format":"open-playing-cards"}')
     expect(out.png).toEqual([...png])

@@ -3,6 +3,7 @@ import { GOOGLE_FONTS, SYSTEM_FONTS, loadGoogleFont, fontStack, loadEmbeddedFont
 import { importImage, readAsDataUrl } from '../model/images'
 import type { FontRef, ImageFit } from '../model/schema'
 import { useStore } from '../state/store'
+import { IconHelp, IconUpload, IconClose } from './icons'
 
 export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -16,14 +17,8 @@ export function Section({ title, children, aside }: { title: string; children: R
   )
 }
 
-/**
- * A field wraps a control that is often a group of buttons rather than one input, so the label is tied to the
- * control with aria-labelledby instead of a <label> wrapper, which would otherwise read every button's text out
- * as the name of each one.
- */
 const FieldLabel = createContext<string | undefined>(undefined)
 
-/** Props that name a control after the field it sits in. */
 export function useFieldLabel(): { 'aria-labelledby'?: string } {
   const id = useContext(FieldLabel)
   return id ? { 'aria-labelledby': id } : {}
@@ -45,10 +40,6 @@ export function Field({ label, children, hint, help }: { label: string; children
   )
 }
 
-/**
- * A "?" that explains something on hover or keyboard focus. The bubble is placed in viewport coordinates and
- * clamped to the window, because the panel it lives in scrolls and would otherwise cut it off at its edge.
- */
 export function HelpTip({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()
   const mark = useRef<HTMLButtonElement>(null)
@@ -57,19 +48,19 @@ export function HelpTip({ label, children }: { label: string; children: ReactNod
   function show() {
     const r = mark.current?.getBoundingClientRect()
     if (!r) return
-    const width = Math.min(320, window.innerWidth - 24)
+    const width = Math.min(340, window.innerWidth - 24)
     setAt({
       top: r.bottom + 8,
-      left: Math.min(Math.max(12, r.left - 8), window.innerWidth - width - 12),
+      left: Math.min(Math.max(12, r.left - 12), window.innerWidth - width - 12),
       width,
-      maxHeight: window.innerHeight - r.bottom - 20,
+      maxHeight: Math.min(360, window.innerHeight - r.bottom - 20),
     })
   }
 
   return (
     <span className="help-tip" onMouseEnter={show} onMouseLeave={() => setAt(null)}>
       <button type="button" ref={mark} className="help-mark" aria-label={label} aria-describedby={id} onFocus={show} onBlur={() => setAt(null)}>
-        ?
+        <IconHelp size={13} />
       </button>
       {at && (
         <span role="tooltip" id={id} className="help-bubble" style={at}>
@@ -99,23 +90,32 @@ export function TextField({ value, onChange, placeholder, maxLength }: { value: 
 export function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [draft, setDraft] = useState<string | null>(null)
   const named = useFieldLabel()
+  const displayVal = draft ?? value
+
   return (
-    <span className="color-field">
-      <span className="swatch" style={{ background: value }}>
-        <input type="color" value={value.length === 4 ? expand(value) : value.slice(0, 7)} onChange={(e) => onChange(e.target.value)} aria-label="Pick color" />
-      </span>
+    <div className="color-field">
+      <label className="swatch" style={{ background: value }} title="Click to open color picker">
+        <input
+          type="color"
+          value={value.length === 4 ? expand(value) : value.slice(0, 7)}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label="Pick color"
+        />
+      </label>
       <input
-        className="input mono"
-        value={draft ?? value}
+        className="input mono color-hex-input"
+        value={displayVal}
         onChange={(e) => {
           setDraft(e.target.value)
           if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) onChange(e.target.value.toLowerCase())
         }}
         onBlur={() => setDraft(null)}
         spellCheck={false}
+        placeholder="#000000"
+        maxLength={7}
         {...named}
       />
-    </span>
+    </div>
   )
 }
 
@@ -123,12 +123,73 @@ function expand(hex: string) {
   return '#' + [...hex.slice(1)].map((c) => c + c).join('')
 }
 
-export function Slider({ value, min, max, step, onChange, format }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void; format?: (v: number) => string }) {
+/**
+ * Clean dual Slider with range bar and direct numeric editing badge.
+ */
+export function Slider({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  format,
+}: {
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (v: number) => void
+  format?: (v: number) => string
+}) {
+  const named = useFieldLabel()
+  const [draft, setDraft] = useState<string | null>(null)
+
+  function nudge(delta: number) {
+    const next = Math.min(max, Math.max(min, Number((value + delta).toFixed(2))))
+    onChange(next)
+  }
+
   return (
-    <span className="slider">
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} {...useFieldLabel()} />
-      <output>{format ? format(value) : value}</output>
-    </span>
+    <div className="slider-control">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="slider-range"
+        {...named}
+      />
+      <input
+        type="text"
+        className="slider-val-badge"
+        value={draft ?? (format ? format(value) : value)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== null) {
+            const cleaned = parseFloat(draft.replace(/[^0-9.-]/g, ''))
+            if (!isNaN(cleaned)) {
+              const clamped = Math.min(max, Math.max(min, cleaned))
+              onChange(Number(clamped.toFixed(2)))
+            }
+            setDraft(null)
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            nudge(step)
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            nudge(-step)
+          }
+        }}
+        title="Click to type exact value, or use Up/Down arrows to adjust"
+        aria-label="Direct value"
+      />
+    </div>
   )
 }
 
@@ -156,7 +217,6 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
   )
 }
 
-/** Font family + weight picker. Lists web fonts, system fonts and fonts uploaded into this deck. */
 export function FontPicker({ value, onChange }: { value: FontRef; onChange: (v: FontRef) => void }) {
   const fonts = useStore((s) => s.deck.fonts)
   const update = useStore((s) => s.update)
@@ -247,7 +307,6 @@ export function FontPicker({ value, onChange }: { value: FontRef; onChange: (v: 
   )
 }
 
-/** Drop zone / picker for a picture. Stores it as a downscaled data URI. */
 export function ImageDrop({ value, onChange, maxEdge = 1024, label = 'Drop a picture or click to browse' }: { value: string | null; onChange: (v: string | null) => void; maxEdge?: number; label?: string }) {
   const notify = useStore((s) => s.notify)
   const ref = useRef<HTMLInputElement>(null)
@@ -281,12 +340,18 @@ export function ImageDrop({ value, onChange, maxEdge = 1024, label = 'Drop a pic
       }}
     >
       <button type="button" className="image-drop-target" onClick={() => ref.current?.click()} disabled={busy}>
-        {value ? <img src={value} alt="" /> : <span className="image-drop-icon" aria-hidden>＋</span>}
-        <span>{busy ? 'Processing…' : value ? 'Replace picture' : label}</span>
+        {value ? (
+          <img src={value} alt="Uploaded art preview" />
+        ) : (
+          <span className="image-drop-icon" aria-hidden>
+            <IconUpload size={24} />
+          </span>
+        )}
+        <span>{busy ? 'Processing image…' : value ? 'Replace picture' : label}</span>
       </button>
       {value && (
-        <button type="button" className="btn ghost small" onClick={() => onChange(null)}>
-          Remove
+        <button type="button" className="btn ghost small" onClick={() => onChange(null)} title="Remove picture">
+          <IconClose size={12} /> Remove
         </button>
       )}
       <input
@@ -310,10 +375,10 @@ export function FitControls({ fit, onChange }: { fit: ImageFit; onChange: (f: Im
       <Field label="Zoom">
         <Slider value={fit.scale} min={0.5} max={3} step={0.01} onChange={(scale) => onChange({ ...fit, scale })} format={pct} />
       </Field>
-      <Field label="Horizontal">
+      <Field label="Horizontal Position">
         <Slider value={fit.x} min={-1} max={1} step={0.01} onChange={(x) => onChange({ ...fit, x })} format={(v) => (v > 0 ? '+' : '') + pct(v)} />
       </Field>
-      <Field label="Vertical">
+      <Field label="Vertical Position">
         <Slider value={fit.y} min={-1} max={1} step={0.01} onChange={(y) => onChange({ ...fit, y })} format={(v) => (v > 0 ? '+' : '') + pct(v)} />
       </Field>
     </div>
